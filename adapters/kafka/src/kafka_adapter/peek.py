@@ -13,6 +13,7 @@ import uuid
 from kafka import KafkaConsumer
 from kafka.structs import TopicPartition
 
+from .client import security_kwargs
 from .models import MessageSample
 
 _PREVIEW_MAX_BYTES = 2048
@@ -38,12 +39,21 @@ def peek_messages(
     limit: int = 10,
     partition: int | None = None,
     from_end: bool = True,
+    security_protocol: str = "PLAINTEXT",
+    sasl_mechanism: str | None = None,
+    sasl_plain_username: str | None = None,
+    sasl_plain_password: str | None = None,
+    ssl_cafile: str | None = None,
 ) -> list[MessageSample]:
     """Return up to `limit` recent messages from `topic` without consuming
     them (no committed offset, no group state left behind).
 
     from_end=True (default) reads the most recent `limit` messages per
     partition — the common "what's on this queue right now" support view.
+
+    security_protocol/sasl_*/ssl_cafile must match whatever the cluster
+    actually needs (see client.py's security_kwargs) — this scratch
+    consumer authenticates independently of the main KafkaAdapter.
     """
     consumer = KafkaConsumer(
         bootstrap_servers=bootstrap_servers,
@@ -51,6 +61,7 @@ def peek_messages(
         enable_auto_commit=False,
         client_id=f"one-msg-ui-peek-{uuid.uuid4().hex[:8]}",
         consumer_timeout_ms=3000,
+        **security_kwargs(security_protocol, sasl_mechanism, sasl_plain_username, sasl_plain_password, ssl_cafile),
     )
     try:
         partitions = [partition] if partition is not None else sorted(consumer.partitions_for_topic(topic) or [])

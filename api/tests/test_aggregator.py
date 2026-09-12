@@ -53,3 +53,53 @@ def test_peek_raises_for_unknown_broker():
         assert False, "expected KeyError"
     except KeyError:
         pass
+
+
+def test_add_broker_appends_and_is_findable():
+    registry = BrokerRegistry([])
+    new = BrokerConfig(id="new1", type="kafka", name="New", environment="dev", config={"bootstrap_servers": "x"})
+    registry.add_broker(new)
+    assert registry.get_config("new1") is new
+    assert new in registry.broker_configs
+
+
+def test_add_broker_rejects_duplicate_id():
+    registry = BrokerRegistry(_configs())
+    dup = BrokerConfig(id="b1", type="solace", name="Dup", environment="dev", config={})
+    try:
+        registry.add_broker(dup)
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
+
+
+def test_remove_broker_drops_it_from_both_the_list_and_lookup():
+    registry = BrokerRegistry(_configs())
+    registry.remove_broker("b1")
+    assert registry.get_config("b1") is None
+    assert all(b.id != "b1" for b in registry.broker_configs)
+
+
+def test_remove_broker_raises_for_unknown_id():
+    registry = BrokerRegistry(_configs())
+    try:
+        registry.remove_broker("nope")
+        assert False, "expected KeyError"
+    except KeyError:
+        pass
+
+
+def test_test_connection_returns_none_on_success():
+    registry = BrokerRegistry([])
+    bc = BrokerConfig(id="b1", type="kafka", name="B1", environment="dev", config={"bootstrap_servers": "x"})
+    with patch.object(BrokerRegistry, "_fetch_kafka", return_value=([], [], [])):
+        assert registry.test_connection(bc) is None
+
+
+def test_test_connection_returns_error_message_on_failure():
+    registry = BrokerRegistry([])
+    bc = BrokerConfig(id="b1", type="kafka", name="B1", environment="dev", config={"bootstrap_servers": "x"})
+    with patch.object(BrokerRegistry, "_fetch_kafka", side_effect=ConnectionError("nope")):
+        error = registry.test_connection(bc)
+    assert error is not None
+    assert "nope" in error

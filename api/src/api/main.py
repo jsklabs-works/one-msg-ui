@@ -5,12 +5,23 @@ Run with: uvicorn api.main:app --reload --port 8000
 
 from __future__ import annotations
 
+from pydantic import BaseModel
+
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import models
 from .aggregator import BrokerRegistry
-from .config import load_broker_configs
+from .config import (
+    FIELD_SPECS,
+    SYSTEM_TYPE_LABELS,
+    BrokerConfig,
+    FieldSpec,
+    load_broker_configs,
+    save_broker_configs,
+    slugify,
+    validate_broker_config_fields,
+)
 
 app = FastAPI(title="one-msg-ui API", version="0.1.0")
 
@@ -18,7 +29,7 @@ app = FastAPI(title="one-msg-ui API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["*"],
 )
 
@@ -33,10 +44,67 @@ def _find_resource(resource_id: str) -> models.Resource:
     raise HTTPException(status_code=404, detail=f"no such resource: {resource_id}")
 
 
+class SystemTypeInfo(BaseModel):
+    type: models.SystemType
+    label: str
+    fields: list[FieldSpec]
+
+
+class CreateBrokerRequest(BaseModel):
+    type: models.SystemType
+    name: str
+    environment: str
+    config: dict
+
+
+@app.get("/api/system-types", response_model=list[SystemTypeInfo])
+def get_system_types():
+    """Drives the "add broker" form's system-type dropdown and, once
+    chosen, its field list — the frontend has no hardcoded knowledge of
+    what each broker type needs, it just renders this.
+    """
+    return [
+        SystemTypeInfo(type=t, label=SYSTEM_TYPE_LABELS[t], fields=FIELD_SPECS[t])
+        for t in ("kafka", "solace", "mq")
+    ]
+
+
 @app.get("/api/brokers", response_model=list[models.Broker])
 def get_brokers():
     brokers, _, _, _ = _registry.fetch_all()
     return brokers
+
+
+@app.post("/api/brokers", response_model=models.Broker, status_code=201)
+def create_broker(req: CreateBrokerRequest):
+    field_errors = validate_broker_config_fields(req.type, req.config)
+    if field_errors:
+        raise HTTPException(status_code=400, detail="; ".join(field_errors))
+
+    broker_id = slugify(req.name)
+    if _registry.get_config(broker_id) is not None:
+        raise HTTPException(status_code=409, detail=f"a broker named {req.name!r} already exists")
+
+    bc = BrokerConfig(id=broker_id, type=req.type, name=req.name, environment=req.environment, config=req.config)
+
+    # Fail loudly now rather than silently later — see test_connection's
+    # docstring. Nothing is persisted if this doesn't work.
+    error = _registry.test_connection(bc)
+    if error is not None:
+        raise HTTPException(status_code=422, detail=f"couldn't connect: {error}")
+
+    _registry.add_broker(bc)
+    save_broker_configs(_registry.broker_configs)
+    return models.Broker(id=bc.id, system_type=bc.type, name=bc.name, environment=bc.environment, status="up")
+
+
+@app.delete("/api/brokers/{broker_id}", status_code=204)
+def delete_broker(broker_id: str):
+    try:
+        _registry.remove_broker(broker_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"no such broker: {broker_id}")
+    save_broker_configs(_registry.broker_configs)
 
 
 @app.get("/api/resources", response_model=list[models.Resource])

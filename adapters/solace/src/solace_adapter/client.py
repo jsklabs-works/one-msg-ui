@@ -34,12 +34,16 @@ class SolaceAdapter:
     flattening that away.
     """
 
-    def __init__(self, broker_id: str, base_url: str, vpn_name: str, username: str, password: str):
+    def __init__(self, broker_id: str, base_url: str, vpn_name: str, username: str, password: str, verify_certificate: bool = True):
         self.broker_id = broker_id
         self.base_url = base_url.rstrip("/")
         self.vpn_name = vpn_name
         self._session = requests.Session()
         self._session.auth = (username, password)
+        # Explicit rather than relying on requests' own True default — dev
+        # brokers commonly present self-signed certs on their HTTPS SEMP
+        # endpoint, and this makes that an intentional per-broker choice.
+        self._session.verify = verify_certificate
 
     def close(self) -> None:
         self._session.close()

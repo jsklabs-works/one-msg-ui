@@ -31,6 +31,8 @@ Notable gotchas worth designing around:
 - **IBM MQ's plain REST resource endpoints are config-only, not runtime status.** Confirmed in Phase 3: `GET .../queue/{name}?attributes=curdepth` is rejected outright — no PCF fallback was actually needed, though; MQSC-over-REST (see table row above and [`adapters/mq/README.md`](../adapters/mq/README.md)) covered every runtime attribute this project needed.
 - **Solace scoping is two-level** (VPN → queue/topic), so the normalized model needs a VPN/namespace concept that MQ and Kafka don't have — don't flatten it away, or multi-tenant Solace brokers become unreadable in the UI.
 
+**Auth, as actually implemented (not just documented) as of the API layer's add-broker flow:** Kafka supports PLAINTEXT/SSL/SASL_PLAINTEXT/SASL_SSL with SASL PLAIN credentials; Solace and MQ both support a TLS-certificate-verification toggle (on by default for Solace, off by default for MQ to match its self-signed dev cert). Not implemented: mTLS client certificates anywhere, Kerberos for Kafka, OAuth/Cloud Pak for MQ. See [`api/README.md`'s TLS/SASL section](../api/README.md#tlssasl) for exactly what's wired through where.
+
 ---
 
 ## 3. Unified data model

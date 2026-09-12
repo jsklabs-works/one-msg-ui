@@ -28,14 +28,48 @@ def _now_iso() -> str:
     return _dt.datetime.now(_dt.timezone.utc).isoformat()
 
 
+def security_kwargs(
+    security_protocol: str = "PLAINTEXT",
+    sasl_mechanism: str | None = None,
+    sasl_plain_username: str | None = None,
+    sasl_plain_password: str | None = None,
+    ssl_cafile: str | None = None,
+) -> dict:
+    """kwargs shared by every KafkaConsumer/KafkaAdminClient this adapter
+    constructs, so TLS/SASL config is set in exactly one place. Kept as a
+    plain function (not baked into __init__) so client.py and peek.py's
+    scratch consumer use identical settings — verified real kwargs against
+    kafka-python-ng's KafkaConsumer.DEFAULT_CONFIG, not guessed.
+    """
+    kwargs: dict = {"security_protocol": security_protocol}
+    if sasl_mechanism:
+        kwargs["sasl_mechanism"] = sasl_mechanism
+        kwargs["sasl_plain_username"] = sasl_plain_username
+        kwargs["sasl_plain_password"] = sasl_plain_password
+    if ssl_cafile:
+        kwargs["ssl_cafile"] = ssl_cafile
+    return kwargs
+
+
 class KafkaAdapter:
     """One instance per broker/cluster, per the Broker shape in the shared model."""
 
-    def __init__(self, broker_id: str, bootstrap_servers: str, namespace: str | None = None):
+    def __init__(
+        self,
+        broker_id: str,
+        bootstrap_servers: str,
+        namespace: str | None = None,
+        security_protocol: str = "PLAINTEXT",
+        sasl_mechanism: str | None = None,
+        sasl_plain_username: str | None = None,
+        sasl_plain_password: str | None = None,
+        ssl_cafile: str | None = None,
+    ):
         self.broker_id = broker_id
         self.bootstrap_servers = bootstrap_servers
         self.namespace = namespace or bootstrap_servers
-        self._admin = KafkaAdminClient(bootstrap_servers=bootstrap_servers, client_id="one-msg-ui-kafka-adapter")
+        sec_kwargs = security_kwargs(security_protocol, sasl_mechanism, sasl_plain_username, sasl_plain_password, ssl_cafile)
+        self._admin = KafkaAdminClient(bootstrap_servers=bootstrap_servers, client_id="one-msg-ui-kafka-adapter", **sec_kwargs)
         # A plain consumer (no group) is the simplest way to discover
         # topics/partitions and their end offsets — the admin client itself
         # doesn't expose end-offset lookups.
@@ -44,6 +78,7 @@ class KafkaAdapter:
             client_id="one-msg-ui-kafka-adapter-discovery",
             enable_auto_commit=False,
             consumer_timeout_ms=5000,
+            **sec_kwargs,
         )
 
     def close(self) -> None:

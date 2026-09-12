@@ -62,16 +62,50 @@ export interface ConsumerGroup {
   partitions: ConsumerGroupPartition[];
 }
 
+// Drives the "add broker" form dynamically — see api/src/api/config.py's
+// FIELD_SPECS, the single source of truth this mirrors at request time
+// (not hand-copied here, so a new adapter type needs no UI code change).
+export interface FieldSpec {
+  name: string;
+  label: string;
+  type: "text" | "password" | "checkbox";
+  required: boolean;
+  default: string | null;
+  placeholder: string | null;
+}
+
+export interface SystemTypeInfo {
+  type: SystemType;
+  label: string;
+  fields: FieldSpec[];
+}
+
+export interface CreateBrokerRequest {
+  type: SystemType;
+  name: string;
+  environment: string;
+  config: Record<string, string>;
+}
+
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8010";
 
-async function getJSON<T>(path: string): Promise<T> {
-  const resp = await fetch(`${BASE_URL}${path}`);
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const resp = await fetch(`${BASE_URL}${path}`, init);
   if (!resp.ok) {
-    const body = await resp.text();
-    throw new Error(`${resp.status} ${resp.statusText}: ${body}`);
+    let detail = resp.statusText;
+    try {
+      const body = await resp.json();
+      detail = body.detail ?? JSON.stringify(body);
+    } catch {
+      // response wasn't JSON — fall back to statusText
+    }
+    throw new Error(detail);
   }
+  if (resp.status === 204) return undefined as T;
   return resp.json() as Promise<T>;
 }
+
+const getJSON = <T,>(path: string) => request<T>(path);
 
 export const api = {
   getBrokers: () => getJSON<Broker[]>("/api/brokers"),
@@ -82,4 +116,13 @@ export const api = {
     getJSON<ConsumerGroup[]>(`/api/consumer-groups${brokerId ? `?broker_id=${encodeURIComponent(brokerId)}` : ""}`),
   peekMessages: (resourceId: string, limit = 10) =>
     getJSON<MessageSample[]>(`/api/resources/${encodeURIComponent(resourceId)}/messages?limit=${limit}`),
+  getSystemTypes: () => getJSON<SystemTypeInfo[]>("/api/system-types"),
+  createBroker: (req: CreateBrokerRequest) =>
+    request<Broker>("/api/brokers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    }),
+  deleteBroker: (brokerId: string) =>
+    request<void>(`/api/brokers/${encodeURIComponent(brokerId)}`, { method: "DELETE" }),
 };

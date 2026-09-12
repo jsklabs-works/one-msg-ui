@@ -18,13 +18,35 @@ import datetime as _dt
 import logging
 
 from . import models, normalize
-from .config import BrokerConfig
+from .config import BrokerConfig, config_bool
 
 logger = logging.getLogger(__name__)
 
 
 def _now_iso() -> str:
     return _dt.datetime.now(_dt.timezone.utc).isoformat()
+
+
+def _kafka_security_kwargs(config: dict) -> dict:
+    """Turns the add-broker form's use_tls/sasl_*/ssl_cafile fields into
+    the kwargs kafka_adapter.client.security_kwargs expects. Kept here
+    (not in kafka_adapter) since it's specifically about translating this
+    API's config-dict shape, not a Kafka-protocol concern.
+    """
+    use_tls = config_bool(config, "use_tls", False)
+    sasl_username = config.get("sasl_username") or None
+    sasl_password = config.get("sasl_password") or None
+    if sasl_username:
+        security_protocol = "SASL_SSL" if use_tls else "SASL_PLAINTEXT"
+    else:
+        security_protocol = "SSL" if use_tls else "PLAINTEXT"
+    return {
+        "security_protocol": security_protocol,
+        "sasl_mechanism": "PLAIN" if sasl_username else None,
+        "sasl_plain_username": sasl_username,
+        "sasl_plain_password": sasl_password,
+        "ssl_cafile": config.get("ssl_cafile") or None,
+    }
 
 
 class BrokerRegistry:
@@ -35,13 +57,38 @@ class BrokerRegistry:
     def get_config(self, broker_id: str) -> BrokerConfig | None:
         return self._by_id.get(broker_id)
 
+    def add_broker(self, bc: BrokerConfig) -> None:
+        if bc.id in self._by_id:
+            raise ValueError(f"broker id already exists: {bc.id}")
+        self.broker_configs.append(bc)
+        self._by_id[bc.id] = bc
+
+    def remove_broker(self, broker_id: str) -> None:
+        if broker_id not in self._by_id:
+            raise KeyError(f"no such broker: {broker_id}")
+        self.broker_configs = [b for b in self.broker_configs if b.id != broker_id]
+        del self._by_id[broker_id]
+
+    def test_connection(self, bc: BrokerConfig) -> str | None:
+        """Try to actually reach the broker before it's saved — an "add
+        broker" form that only fails silently later (on the next poll) is
+        worse than one that tells you now the SEMP URL is wrong. Returns
+        None on success, or an error message.
+        """
+        fetcher = getattr(self, self._FETCHER_NAMES[bc.type])
+        try:
+            fetcher(bc)
+            return None
+        except Exception as exc:
+            return str(exc)
+
     # -- per-broker-type fetchers, each isolated so one broker's failure
     #    can't take down another's data -----------------------------------
 
     def _fetch_kafka(self, bc: BrokerConfig):
         from kafka_adapter.client import KafkaAdapter
 
-        adapter = KafkaAdapter(broker_id=bc.id, bootstrap_servers=bc.config["bootstrap_servers"])
+        adapter = KafkaAdapter(broker_id=bc.id, bootstrap_servers=bc.config["bootstrap_servers"], **_kafka_security_kwargs(bc.config))
         try:
             groups = adapter.get_consumer_groups()
             resources = [normalize.kafka_resource(r, bc.id) for r in adapter.get_resources(consumer_groups=groups)]
@@ -60,6 +107,7 @@ class BrokerRegistry:
             vpn_name=bc.config["vpn_name"],
             username=bc.config["username"],
             password=bc.config["password"],
+            verify_certificate=config_bool(bc.config, "verify_certificate", True),
         )
         try:
             resources = [normalize.solace_resource(r, bc.id) for r in adapter.get_resources()]
@@ -77,6 +125,7 @@ class BrokerRegistry:
             qmgr_name=bc.config["qmgr_name"],
             username=bc.config["admin_username"],
             password=bc.config["admin_password"],
+            verify_tls=config_bool(bc.config, "verify_tls", False),
         )
         try:
             raw_resources = adapter.get_resources(queue_pattern=bc.config.get("queue_pattern", "*"))
@@ -134,6 +183,7 @@ class BrokerRegistry:
                 resource_id=resource.id,
                 topic=resource.name,
                 limit=limit,
+                **_kafka_security_kwargs(bc.config),
             )
             return [normalize.kafka_message_sample(m) for m in samples]
 
@@ -148,6 +198,7 @@ class BrokerRegistry:
                 resource_id=resource.id,
                 queue_name=resource.name,
                 limit=limit,
+                verify_certificate=config_bool(bc.config, "verify_certificate", True),
             )
             return [normalize.solace_message_sample(m) for m in samples]
 
@@ -158,7 +209,7 @@ class BrokerRegistry:
 
             session = requests.Session()
             session.auth = (bc.config["app_username"], bc.config["app_password"])
-            session.verify = False
+            session.verify = config_bool(bc.config, "verify_tls", False)
             try:
                 samples = peek_messages(
                     session=session,

@@ -20,6 +20,7 @@ from solace.messaging.config.solace_properties.authentication_properties import 
 )
 from solace.messaging.config.solace_properties.service_properties import VPN_NAME
 from solace.messaging.config.solace_properties.transport_layer_properties import HOST
+from solace.messaging.config.transport_security_strategy import TLS
 
 from .models import MessageSample
 
@@ -52,10 +53,16 @@ def peek_messages(
     resource_id: str,
     queue_name: str,
     limit: int = 10,
+    verify_certificate: bool = True,
 ) -> list[MessageSample]:
     """Return up to `limit` messages from `queue_name`, oldest first,
     without removing them — a proper broker-side browse, not a
     consume-then-not-ack workaround.
+
+    verify_certificate only matters when smf_host uses `tcps://` (TLS) —
+    set it False for a broker presenting a self-signed cert (common in
+    dev), same intent as the SEMP client's verify_certificate in
+    client.py. Harmless to pass either way against a plain `tcp://` host.
     """
     props = {
         HOST: smf_host,
@@ -63,7 +70,10 @@ def peek_messages(
         SCHEME_BASIC_USER_NAME: username,
         SCHEME_BASIC_PASSWORD: password,
     }
-    service = MessagingService.builder().from_properties(props).build()
+    builder = MessagingService.builder().from_properties(props)
+    if not verify_certificate:
+        builder = builder.with_transport_security_strategy(TLS.create().without_certificate_validation())
+    service = builder.build()
     service.connect()
     try:
         queue = Queue.durable_exclusive_queue(queue_name)
