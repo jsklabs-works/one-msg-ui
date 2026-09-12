@@ -8,6 +8,7 @@ import { Link } from "react-router-dom";
 import { api, type Broker, type HealthEvent, type Resource, type SystemType } from "../api";
 import { BrokerStatusBadge, SeverityBadge, SystemTypeBadge } from "../components/Badges";
 import AddBrokerForm from "../components/AddBrokerForm";
+import StatsSummary from "../components/StatsSummary";
 import { healthForBroker, worstSeverity } from "../healthUtils";
 
 const REFRESH_INTERVAL_MS = 15_000; // matches the 15-60s polling cadence architecture.md §4 recommends
@@ -72,7 +73,10 @@ export default function Overview() {
   return (
     <div className="page">
       <header className="page-header">
-        <h1>one-msg-ui</h1>
+        <h1>
+          <span className="brand-mark" aria-hidden="true">📡</span>
+          one-msg-ui
+        </h1>
         <div className="header-actions">
           <button onClick={() => setShowAddForm((v) => !v)}>{showAddForm ? "Close" : "+ Add broker"}</button>
           <button onClick={load} disabled={loading}>
@@ -82,6 +86,8 @@ export default function Overview() {
       </header>
 
       {error && <div className="error-banner">Couldn't load data: {error}</div>}
+
+      {!noBrokersConfigured && <StatsSummary brokers={brokers} resources={resources} health={health} />}
 
       {showAddForm && (
         <section className="add-broker-panel">
@@ -97,6 +103,7 @@ export default function Overview() {
 
       {noBrokersConfigured && !showAddForm ? (
         <section className="empty-landing">
+          <div className="empty-landing-icon" aria-hidden="true">📡</div>
           <h2>No message brokers configured yet</h2>
           <p className="muted">
             Connect a broker to start monitoring queue depth, consumer lag, and health — or browse messages
@@ -185,8 +192,8 @@ export default function Overview() {
                     <td>{brokerById[r.broker_id]?.name ?? r.broker_id}</td>
                     <td className="mono">{r.namespace}</td>
                     <td className="mono">{r.name}</td>
-                    <td>{r.depth_current === null ? "—" : `${r.depth_current}${r.depth_max ? ` / ${r.depth_max}` : ""}`}</td>
-                    <td>{r.consumer_lag === null ? "—" : r.consumer_lag}</td>
+                    <td className="num">{r.depth_current === null ? "—" : `${r.depth_current}${r.depth_max ? ` / ${r.depth_max}` : ""}`}</td>
+                    <td className="num">{r.consumer_lag === null ? "—" : r.consumer_lag}</td>
                     <td>
                       <Link to={`/resources/${encodeURIComponent(r.id)}`}>Inspect →</Link>
                     </td>

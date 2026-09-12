@@ -8,7 +8,7 @@ Cross-system dashboard and per-resource drill-down — see [`/docs/architecture.
 
 Two surfaces, both first-class per the resolved usage-pattern decision:
 
-- **Overview** ([`src/pages/Overview.tsx`](src/pages/Overview.tsx)) — broad, shallow, cross-broker: a broker-status strip plus a table of every resource across every broker, filterable by environment and system type. The "what's on fire" screen. When zero brokers are configured, this becomes a landing page inviting you to add one instead of an empty table.
+- **Overview** ([`src/pages/Overview.tsx`](src/pages/Overview.tsx)) — a stats summary (brokers online, resources monitored, open health issues, total Kafka consumer lag — see [`components/StatsSummary.tsx`](src/components/StatsSummary.tsx)), a broker-status strip, and a table of every resource across every broker, filterable by environment and system type. The "what's on fire" screen. When zero brokers are configured, this becomes a landing page inviting you to add one instead of an empty table.
 - **Drill-down** ([`src/pages/ResourceDetail.tsx`](src/pages/ResourceDetail.tsx)) — narrow, deep, single-resource: full stats, broker health for that resource's broker, Kafka consumer-group/partition-lag breakdown when applicable, and non-destructive message browsing (architecture.md §3.1). The "let me actually look at this" screen. Message bodies are shown as the API's already-truncated `body_preview`, never a raw full payload.
 
 ### Adding a broker
@@ -21,12 +21,21 @@ Two surfaces, both first-class per the resolved usage-pattern decision:
 src/
   api.ts                     typed fetch client — mirrors api/src/api/models.py by hand, keep in sync
   healthUtils.ts             pure helpers (worst-severity-among-events, filter-by-broker)
+  index.css                  design tokens — the dark-mode values from the dataviz skill's
+                              validated reference palette (status colors, the first 3
+                              all-pairs-validated categorical hues for the 3 system types)
   components/Badges.tsx      SystemTypeBadge / SeverityBadge / BrokerStatusBadge
+  components/StatsSummary.tsx  the stat-tile row (brokers online, resources, health issues,
+                              consumer lag) — derived client-side from data already fetched
   components/AddBrokerForm.tsx  dynamic add-broker form, driven by GET /api/system-types
   pages/Overview.tsx         the broad cross-broker view + empty-state landing page
   pages/ResourceDetail.tsx   the per-resource drill-down + message peek
   App.tsx                    react-router routes: "/" and "/resources/:resourceId"
 ```
+
+## Visual design
+
+Dark-committed by design (an ops console, not a marketing page) rather than a light/dark toggle — see `index.css`'s header comment. Colors aren't ad-hoc: they're the dark-mode token values from the `dataviz` skill's validated reference palette — status colors (good/warning/critical) for severity and broker-status badges, and the first three categorical hues (the specific trio the palette's validator confirms clears its CVD/contrast checks together) for the three system-type badges. No new hex values were invented, so no re-validation was needed — see the skill's `references/palette.md` if extending this to a 4th system type or a light mode.
 
 ## Running it locally
 

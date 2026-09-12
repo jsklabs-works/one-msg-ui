@@ -71,7 +71,7 @@ export default function ResourceDetail() {
   if (error || !resource) {
     return (
       <div className="page">
-        <Link to="/">← Back to overview</Link>
+        <Link className="breadcrumb" to="/">← Back to overview</Link>
         <div className="error-banner">Couldn't load resource: {error ?? "not found"}</div>
       </div>
     );
@@ -79,12 +79,10 @@ export default function ResourceDetail() {
 
   return (
     <div className="page">
-      <Link to="/">← Back to overview</Link>
-      <header className="page-header">
-        <h1>
-          <SystemTypeBadge systemType={resource.system_type} /> {resource.name}
-        </h1>
-      </header>
+      <Link className="breadcrumb" to="/">← Back to overview</Link>
+      <h1 className="detail-title">
+        <SystemTypeBadge systemType={resource.system_type} /> {resource.name}
+      </h1>
 
       <section className="detail-grid">
         <div>
@@ -121,7 +119,11 @@ export default function ResourceDetail() {
           <ul className="health-list">
             {health.map((h, i) => (
               <li key={i}>
-                <SeverityBadge severity={h.severity} /> <strong>{h.category}</strong> — {h.message}
+                <div className="health-list-head">
+                  <SeverityBadge severity={h.severity} />
+                  <strong>{h.category}</strong>
+                </div>
+                <div className="health-list-message">{h.message}</div>
               </li>
             ))}
           </ul>
