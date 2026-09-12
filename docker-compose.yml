@@ -23,3 +23,9 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+
+# No Solace service here (Phase 2): this dev machine already runs a
+# standalone Solace PubSub+ broker (container "pubSubStandardSingleNode",
+# not managed by this docker-compose file) at the default ports —
+# SEMP :8080, AMQP :5672, MQTT :1883, SMF :55554. The Solace adapter targets
+# that directly. See adapters/solace/README.md.

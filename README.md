@@ -14,7 +14,8 @@ Each system is fundamentally different (point-to-point queues vs. distributed lo
 ## Status
 
 - **Kafka adapter** — Phase 1 complete: topic/consumer-group discovery, lag calculation, connectivity + replication (ISR/under-replicated/offline) health, and non-destructive message peek, tested against a local Docker Kafka. See [`adapters/kafka/README.md`](adapters/kafka/README.md) to run it.
-- **Solace, IBM MQ adapters, API layer, UI** — not started (Phases 2-3 and beyond).
+- **Solace adapter** — Phase 2 complete: VPN/queue monitoring (SEMP v2), connectivity + spool-usage health, and non-destructive message browsing (via the official `solace-pubsubplus` client), verified against a real broker. See [`adapters/solace/README.md`](adapters/solace/README.md) to run it.
+- **IBM MQ adapter, API layer, UI** — not started (Phase 3 and beyond).
 
 ## Layout
 

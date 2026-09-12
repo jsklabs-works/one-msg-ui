@@ -68,7 +68,7 @@ A non-destructive "what's actually on this queue?" view — the most common supp
 
 - **IBM MQ** — REST Admin API supports browse-mode `GET` on a queue (non-destructive get, doesn't advance the queue). Well-supported, build this first.
 - **Kafka** — a consumer with a scratch/no-commit group (or `assign()` + manual `seek()`), poll without committing offsets. Non-destructive as long as no group-commit happens; the adapter must guarantee it never commits on the browse path.
-- **Solace** — SEMP v2 is a *monitoring* API and does not expose message bodies. Peeking requires a real client-protocol connection (JMS/AMQP/SMF) using Solace's non-destructive **Browser** pattern (get-without-remove). This is a different connection type than the SEMP-based monitoring adapter uses — flag as extra adapter complexity, and validate feasibility early in Phase 2 rather than assuming it's a thin SEMP addition.
+- **Solace** — confirmed in Phase 2 (see [`adapters/solace/README.md`](../adapters/solace/README.md)): SEMP v2 *does* have queue message-inspection endpoints (`/queues/{q}/msgs`), but they return metadata only (id, size, timestamp) — never the body. Peeking the actual payload needs a real client-protocol connection; the official `solace-pubsubplus` Python client's `MessageQueueBrowser` provides a proper broker-native non-destructive browse (verified: spooled count unchanged after browsing). This is a second connection type (SMF) alongside the SEMP-based monitoring connection — extra adapter complexity as flagged, but a well-supported path, not a workaround.
 
 Message bodies may contain sensitive payload data — `body_preview` should be capped/truncated by default and access to full-body view should go through the same access control as everything else (see §7 environment/access-control decisions).
 
@@ -127,8 +127,8 @@ Kept ordinary and boring on purpose — this is not the part of the system worth
 
 ## 6. Phased rollout
 
-1. **Phase 1 — Kafka only.** Best-documented Admin API, richest existing tooling (exporters, `kafka-consumer-groups` CLI to validate against), and consumer lag is the metric most teams care about most urgently. Proves the adapter pattern and the normalized schema end-to-end with one system.
-2. **Phase 2 — Add Solace.** REST-based (SEMP v2) for monitoring, closest in shape to MQ, existing community Prometheus exporter to lean on. Validates the VPN/namespace concept in the data model. Message browsing needs a separate client-protocol connection (see §3.1) — validate feasibility early in this phase rather than assuming it's a thin SEMP addition.
+1. **Phase 1 — Kafka only. Done.** Best-documented Admin API, richest existing tooling (exporters, `kafka-consumer-groups` CLI to validate against), and consumer lag is the metric most teams care about most urgently. Adapter pattern and normalized schema proved out end-to-end — see [`adapters/kafka/README.md`](../adapters/kafka/README.md).
+2. **Phase 2 — Add Solace. Done.** REST-based (SEMP v2) for monitoring; VPN/namespace concept validated in the data model. Message browsing needed a separate client-protocol connection as anticipated (see §3.1) — the official `solace-pubsubplus` client's `MessageQueueBrowser` covers it well.
 3. **Phase 3 — Add IBM MQ.** REST Admin API first; identify which specific attributes your environment needs that are PCF-only, and add a PCF fallback path only for those rather than building full PCF support speculatively.
 4. **Phase 4 — Expand scope**, informed by what Phase 1–3 actually needed: admin actions, produce/consume test tooling, additional broker types (RabbitMQ, ActiveMQ, Azure Service Bus, SQS/SNS). (Message browsing/inspection moved into v1 scope — see §3.1 and §7.)
 
