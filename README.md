@@ -13,7 +13,8 @@ Each system is fundamentally different (point-to-point queues vs. distributed lo
 
 ## Status
 
-Early scaffold. No adapters are implemented yet — this repo currently just holds the architecture doc and the planned directory layout.
+- **Kafka adapter** — MVP working: topic/consumer-group discovery, lag calculation, connectivity health check, and non-destructive message peek, tested against a local Docker Kafka. See [`adapters/kafka/README.md`](adapters/kafka/README.md) to run it. JMX-based broker health detail (ISR/replication) not wired up yet.
+- **Solace, IBM MQ adapters, API layer, UI** — not started (Phases 2-3 and beyond).
 
 ## Layout
 
@@ -34,4 +35,12 @@ Per the architecture doc's phased rollout: **Kafka first** (Phase 1), then Solac
 
 ## Getting started
 
-Nothing runnable yet — this is the initial commit. Next step is the Kafka adapter (see `adapters/kafka/README.md`).
+```bash
+docker compose up -d          # local single-node Kafka (KRaft, no ZooKeeper)
+cd adapters/kafka
+python3 -m venv .venv && ./.venv/bin/pip install -e ".[dev]"
+./.venv/bin/python scripts/seed.py                    # optional: sample data
+./.venv/bin/python -m kafka_adapter.main topics
+```
+
+See [`adapters/kafka/README.md`](adapters/kafka/README.md) for the full picture, including message peek and running the test suite.
