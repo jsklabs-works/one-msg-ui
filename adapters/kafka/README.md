@@ -9,6 +9,7 @@ Translate Kafka's native monitoring surface into the shared model defined in [`/
 - `Resource` — one per topic, with `consumer_lag` populated (Kafka has no native "depth" concept; `depth_current`/`depth_max` stay null)
 - `ConsumerGroup` — group state, member count, and per-partition `{log_end_offset, committed_offset, lag}`
 - `HealthEvent` — broker/ISR/under-replicated-partition issues
+- `MessageSample` — non-destructive peek at a topic/partition's messages (see [`/docs/architecture.md §3.1`](../../docs/architecture.md#31-message-browsingpeek-in-scope-for-v1)): a scratch/no-commit consumer group or `assign()` + manual `seek()`, polling without ever committing offsets
 
 ## Data sources
 

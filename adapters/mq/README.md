@@ -8,6 +8,7 @@ Translate IBM MQ's native monitoring surface into the shared model defined in [`
 
 - `Resource` — one per queue, with `depth_current` (`CURDEPTH`) and `depth_max` (`MAXDEPTH`) populated; `consumer_lag` stays null (no per-consumer offset concept in MQ)
 - `HealthEvent` — queue manager and channel status
+- `MessageSample` — non-destructive peek at a queue's messages (see [`/docs/architecture.md §3.1`](../../docs/architecture.md#31-message-browsingpeek-in-scope-for-v1)): REST Admin API browse-mode `GET` (doesn't advance the queue)
 
 ## Data sources
 

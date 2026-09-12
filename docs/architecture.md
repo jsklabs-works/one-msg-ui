@@ -1,7 +1,7 @@
 # One UI for Messaging — Unified Monitoring Architecture
 
-**Scope:** A single monitoring console covering IBM MQ, Apache Kafka, and Solace PubSub+, showing queue/topic depth, consumer lag, and broker/system health.
-**Not in scope (v1):** admin actions (create/delete queues, ACL changes), message browsing/replay, produce/consume of test messages. These are natural v2 candidates once the monitoring layer proves out — see Phase 4.
+**Scope:** A single console covering IBM MQ, Apache Kafka, and Solace PubSub+, showing queue/topic depth, consumer lag, broker/system health, **and read-only message browsing/inspection** (peek at what's sitting on a queue/topic without consuming it) — the goal is to ease day-to-day messaging operations and support, not just provide a monitoring view.
+**Not in scope (v1):** admin actions (create/delete queues, resize, ACL changes), produce/consume or replay of messages, and alerting/paging. Alerting is a deliberately separate concern — this tool is a read-only operational/support view that sits alongside each broker's native alerting (IBM's tooling, Confluent Control Center, Solace's native monitor), not a replacement for it; alert-rule ownership is not on this project's roadmap. Admin actions and produce/consume are natural v2 candidates once monitoring + browsing prove out — see Phase 4.
 
 ---
 
@@ -55,9 +55,22 @@ ConsumerGroup                  # Kafka-specific, modeled explicitly rather than 
 
 HealthEvent
   broker_id, severity (ok | warn | critical), category (connectivity | capacity | replication | spool), message, timestamp
+
+MessageSample                  # non-destructive peek, not a consume — see §3.1
+  resource_id, message_id (or offset/partition for Kafka), timestamp, headers, body_preview, size_bytes
 ```
 
 Design rationale: rather than inventing a single "queue depth" field that's forced onto Kafka (which has no such number), the model keeps **depth** and **consumer_lag** as separate fields that are simply null/not-applicable for systems where the concept doesn't exist. The UI layer decides what to show per system type instead of the data model lying about equivalence. This avoids the classic mistake of these unification efforts — presenting a fake apples-to-apples number that misleads an on-call engineer at 3am.
+
+### 3.1 Message browsing/peek (in scope for v1)
+
+A non-destructive "what's actually on this queue?" view — the most common support-ticket need — without consuming or altering anything. Per-system mechanics differ enough to call out explicitly:
+
+- **IBM MQ** — REST Admin API supports browse-mode `GET` on a queue (non-destructive get, doesn't advance the queue). Well-supported, build this first.
+- **Kafka** — a consumer with a scratch/no-commit group (or `assign()` + manual `seek()`), poll without committing offsets. Non-destructive as long as no group-commit happens; the adapter must guarantee it never commits on the browse path.
+- **Solace** — SEMP v2 is a *monitoring* API and does not expose message bodies. Peeking requires a real client-protocol connection (JMS/AMQP/SMF) using Solace's non-destructive **Browser** pattern (get-without-remove). This is a different connection type than the SEMP-based monitoring adapter uses — flag as extra adapter complexity, and validate feasibility early in Phase 2 rather than assuming it's a thin SEMP addition.
+
+Message bodies may contain sensitive payload data — `body_preview` should be capped/truncated by default and access to full-body view should go through the same access control as everything else (see §7 environment/access-control decisions).
 
 ---
 
@@ -106,7 +119,7 @@ Kept ordinary and boring on purpose — this is not the part of the system worth
 
 - **Adapters:** small services (one per broker type), written in whatever language your team already runs in production — Kafka's ecosystem favors Java/Kotlin or Python (`kafka-python`/`confluent-kafka`) for the Admin client; MQ and Solace both have first-class REST clients so any language works there.
 - **Metrics storage:** Prometheus is the pragmatic default — community exporters already exist for Solace (`solace-prometheus-exporter`) and for Kafka (`kafka-exporter`, JMX exporter), so two of three adapters can start as "run the existing exporter + a thin normalization shim" rather than from scratch. IBM MQ has community and IBM-supported Prometheus exporters too.
-- **Metadata / config store:** small relational DB (broker inventory, thresholds, alert rules) — Postgres is fine.
+- **Metadata / config store:** small relational DB (broker inventory, thresholds, encrypted broker credentials) — Postgres is fine. See §7 for the credential-storage decision.
 - **API layer:** REST or GraphQL over the normalized model; GraphQL is worth it if the UI needs to query "all resources across all brokers above 80% depth" type cross-cutting views often.
 - **UI:** whatever your team's standard web stack is — this is a fairly conventional dashboard/table/drill-down app, nothing about the messaging domain constrains that choice.
 
@@ -115,20 +128,21 @@ Kept ordinary and boring on purpose — this is not the part of the system worth
 ## 6. Phased rollout
 
 1. **Phase 1 — Kafka only.** Best-documented Admin API, richest existing tooling (exporters, `kafka-consumer-groups` CLI to validate against), and consumer lag is the metric most teams care about most urgently. Proves the adapter pattern and the normalized schema end-to-end with one system.
-2. **Phase 2 — Add Solace.** REST-based (SEMP v2), closest in shape to MQ, existing community Prometheus exporter to lean on. Validates the VPN/namespace concept in the data model.
+2. **Phase 2 — Add Solace.** REST-based (SEMP v2) for monitoring, closest in shape to MQ, existing community Prometheus exporter to lean on. Validates the VPN/namespace concept in the data model. Message browsing needs a separate client-protocol connection (see §3.1) — validate feasibility early in this phase rather than assuming it's a thin SEMP addition.
 3. **Phase 3 — Add IBM MQ.** REST Admin API first; identify which specific attributes your environment needs that are PCF-only, and add a PCF fallback path only for those rather than building full PCF support speculatively.
-4. **Phase 4 — Expand scope**, informed by what Phase 1–3 actually needed: message browsing/inspection, admin actions, produce/consume test tooling, additional broker types (RabbitMQ, ActiveMQ, Azure Service Bus, SQS/SNS).
+4. **Phase 4 — Expand scope**, informed by what Phase 1–3 actually needed: admin actions, produce/consume test tooling, additional broker types (RabbitMQ, ActiveMQ, Azure Service Bus, SQS/SNS). (Message browsing/inspection moved into v1 scope — see §3.1 and §7.)
 
 Kafka-first is a deliberate choice against your original "IBM MQ, Kafka, Solace" ordering — it's the one where getting the abstraction right matters most (since it's the most different from the other two), so it's worth validating the model against the hardest case before the easier ones.
 
 ---
 
-## 7. Open questions to resolve before build
+## 7. Decisions (resolved 2026-09-12)
 
-- **Alerting ownership:** does this UI *replace* existing broker-specific alerting (IBM's own tooling, Confluent Control Center, Solace's native monitor), or sit alongside it as a read-only cross-system view? This affects whether alert-rule state lives here or is just visualized from elsewhere.
-- **Credential management:** each adapter needs broker credentials (MQ basic auth/mTLS, Kafka SASL/mTLS, Solace basic auth/mTLS) — where do these live (vault, k8s secrets) and who rotates them?
-- **Multi-environment scope:** is this one UI across prod/uat/dev for all three systems, or prod-only initially? Affects the `environment` field's importance and access-control design from day one.
-- **On-call usage pattern:** is the primary use case a dashboard someone glances at, or something an on-call engineer drills into during an incident? This should drive whether Phase 1 prioritizes broad coverage (many brokers, shallow detail) or deep detail on fewer brokers.
+- **Alerting ownership:** out of scope, permanently, not just for v1. This is a read-only operations/support view that sits *alongside* each broker's native alerting (IBM's tooling, Confluent Control Center, Solace's native monitor) — it never owns alert-rule state, thresholds-for-paging, or notification routing. The `environment`/`HealthEvent` data this app surfaces is for a human looking at a screen, not for triggering pages.
+- **Credential management:** app-owned, stored encrypted in the Postgres metadata store — no external vault/secrets-manager dependency for now, to keep the deployment footprint light (no extra infra to stand up). Encrypt at the column level (e.g. `pgcrypto` or app-level envelope encryption with a single KMS- or env-provided master key) rather than storing plaintext. Revisit if/when this ever touches broker environments with stricter compliance requirements than support tooling typically has.
+- **Multi-environment scope:** prod/uat/dev, all in scope from day one. `Broker.environment` is a first-class filter/grouping dimension in the UI and the API from the start, and access control must be designed around it from the start too (e.g. a support engineer scoped to uat/dev shouldn't implicitly get prod visibility) — this is not a "bolt on later" concern.
+- **Usage pattern:** both glance-dashboard and incident drill-down, roughly equally weighted. The UI needs two distinct surfaces from early on: a broad cross-broker overview (many brokers/resources, shallow detail — the "what's on fire" view) and a deep per-resource drill-down (single queue/topic, full detail, message browsing per §3.1 — the "let me actually look at this" view). Don't let Phase 1 optimize for only one of these; both are first-class from the Kafka adapter onward.
+- **Scope addition — message browsing/inspection is in v1**, not deferred to Phase 4 as originally scoped. This was the standout "operations and support" need: non-destructive peek at queue/topic contents. Admin actions (create/delete/purge/ACLs) and produce/consume/replay remain deferred to Phase 4 — browsing was the specific gap, not a signal to pull all of Phase 4 forward. See §3.1 for per-broker mechanics and the Solace caveat (needs a client-protocol connection, not just SEMP).
 
 ---
 

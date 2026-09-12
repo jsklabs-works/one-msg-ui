@@ -1,8 +1,15 @@
 # one-msg-ui
 
-A single monitoring UI for heterogeneous messaging systems — starting with **IBM MQ**, **Apache Kafka**, and **Solace PubSub+**.
+A single UI to ease day-to-day operations and support across heterogeneous messaging systems — starting with **IBM MQ**, **Apache Kafka**, and **Solace PubSub+**. Read-only: monitoring (queue depth, consumer lag, health) plus non-destructive message browsing — not an admin console, and deliberately not an alerting tool (see Scope below).
 
 Each system is fundamentally different (point-to-point queues vs. distributed log vs. topic/queue hybrid), so rather than faking a one-size-fits-all abstraction, this project normalizes each broker's native metrics into a shared schema and builds the UI against that — see [`docs/architecture.md`](docs/architecture.md) for the full design.
+
+## Scope
+
+- **In v1:** cross-broker monitoring (depth/lag/health) + non-destructive message browsing (peek at what's on a queue/topic), across prod/uat/dev from day one.
+- **Out of scope, permanently:** alerting/paging — this sits alongside each broker's native alerting tools, never replaces or owns alert rules.
+- **Deferred (Phase 4):** admin actions (create/delete/purge/ACLs), produce/consume/replay of messages, additional broker types.
+- Full rationale and the resolved open questions (credential storage, environment scope, dashboard vs. drill-down usage) are in [`docs/architecture.md §7`](docs/architecture.md#7-decisions-resolved-2026-09-12).
 
 ## Status
 

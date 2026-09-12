@@ -9,6 +9,7 @@ Translate Solace's native monitoring surface into the shared model defined in [`
 - `Resource` — one per queue (spooled messages/bytes → `depth_current`; configured spool quota → `depth_max`) or topic
 - Solace is scoped two levels deep (**Message VPN → queue/topic**) — keep the VPN/namespace concept explicit in this adapter's output rather than flattening it away, or multi-tenant brokers become unreadable in the UI
 - `HealthEvent` — broker health, memory, spool usage, uptime
+- `MessageSample` — non-destructive peek at a queue/topic's messages (see [`/docs/architecture.md §3.1`](../../docs/architecture.md#31-message-browsingpeek-in-scope-for-v1)). **Note:** SEMP v2 is monitoring-only and doesn't expose message bodies — this needs a separate client-protocol connection (JMS/AMQP/SMF) using Solace's non-destructive Browser pattern, on top of the SEMP-based monitoring path. Validate this is feasible against a test broker early, before assuming it's a thin addition to the SEMP shim.
 
 ## Data sources
 
