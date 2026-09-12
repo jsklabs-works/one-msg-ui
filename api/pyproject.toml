@@ -1,0 +1,20 @@
+[project]
+name = "one-msg-ui-api"
+version = "0.1.0"
+description = "Unified API layer for one-msg-ui — aggregates the three broker adapters and serves the normalized model to the UI (see /docs/architecture.md §4)"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "pydantic>=2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "httpx>=0.27"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

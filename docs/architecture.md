@@ -87,30 +87,30 @@ Message bodies may contain sensitive payload data — `body_preview` should be c
        └───────────────┬─────────────────────┘
                         ▼
             ┌───────────────────────┐
-            │  Ingestion / Poller   │  (scheduled pulls; push where
-            │  service               │   the broker supports webhooks/
-            └───────────┬───────────┘   streaming metrics)
+            │  Ingestion / Poller   │  NOT BUILT — MVP's API layer queries
+            │  service               │  brokers live on every request
+            └───────────┬───────────┘  instead (see api/README.md's
+                        ▼              "live passthrough" scope note)
+            ┌───────────────────────┐
+            │  Time-series store    │  NOT BUILT for the same reason —
+            │  + metadata store      │  needed once this handles more than
+            └───────────┬───────────┘  a handful of local dev brokers
                         ▼
             ┌───────────────────────┐
-            │  Time-series store    │  (Prometheus, or Timescale/
-            │  + metadata store      │   Influx — see §5)
+            │  Unified API layer    │  done (MVP) — FastAPI, REST,
+            │                        │  see api/README.md
             └───────────┬───────────┘
                         ▼
             ┌───────────────────────┐
-            │  Unified API layer    │  (GraphQL/REST over the
-            │                        │   normalized model)
-            └───────────┬───────────┘
-                        ▼
-            ┌───────────────────────┐
-            │        UI              │  cross-system dashboard,
-            │                        │  per-broker drill-down,
-            │                        │  alerting rules
+            │        UI              │  done (MVP) — React, cross-system
+            │                        │  overview + per-resource drill-down,
+            │                        │  see ui/README.md (no alerting — §7)
             └───────────────────────┘
 ```
 
 Each adapter is an independent, replaceable module — this is the load-bearing design decision. Adding RabbitMQ or Azure Service Bus later means writing one more adapter against the existing schema, not touching the UI or the four other layers. Each adapter owns translating its system's native vocabulary (CURDEPTH, log-end-offset, spooled messages) into the common `Resource`/`ConsumerGroup`/`HealthEvent` shapes above, and nothing downstream needs to know which broker a metric came from beyond the `system_type` tag.
 
-Polling vs. push: all three systems are comfortably poll-based for monitoring purposes (15–60s intervals are standard for capacity/lag dashboards). None require you to run a push-based pipeline for v1 — that's added complexity for marginal freshness gain at this stage.
+Polling vs. push: all three systems are comfortably poll-based for monitoring purposes (15–60s intervals are standard for capacity/lag dashboards). None require you to run a push-based pipeline for v1 — that's added complexity for marginal freshness gain at this stage. The MVP API layer approximates this by having the UI poll it every 15s and having it query brokers live rather than actually implementing the poller/store — fine for three local brokers, not the design to keep once this points at real infrastructure.
 
 ---
 

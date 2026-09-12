@@ -1,0 +1,41 @@
+{
+  "brokers": [
+    {
+      "id": "local-kafka",
+      "type": "kafka",
+      "name": "Local Kafka",
+      "environment": "dev",
+      "config": {
+        "bootstrap_servers": "localhost:9092"
+      }
+    },
+    {
+      "id": "local-solace",
+      "type": "solace",
+      "name": "Local Solace",
+      "environment": "dev",
+      "config": {
+        "semp_url": "http://localhost:8080",
+        "smf_host": "tcp://localhost:55554",
+        "vpn_name": "default",
+        "username": "admin",
+        "password": "admin"
+      }
+    },
+    {
+      "id": "local-mq",
+      "type": "mq",
+      "name": "Local MQ",
+      "environment": "dev",
+      "config": {
+        "admin_url": "https://localhost:9543",
+        "qmgr_name": "QM1",
+        "admin_username": "admin",
+        "admin_password": "adminpassw0rd",
+        "app_username": "app",
+        "app_password": "apppassw0rd",
+        "queue_pattern": "DEV.*"
+      }
+    }
+  ]
+}

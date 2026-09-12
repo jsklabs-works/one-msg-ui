@@ -16,7 +16,8 @@ Each system is fundamentally different (point-to-point queues vs. distributed lo
 - **Kafka adapter** — Phase 1 complete: topic/consumer-group discovery, lag calculation, connectivity + replication (ISR/under-replicated/offline) health, and non-destructive message peek, tested against a local Docker Kafka. See [`adapters/kafka/README.md`](adapters/kafka/README.md) to run it.
 - **Solace adapter** — Phase 2 complete: VPN/queue monitoring (SEMP v2), connectivity + spool-usage health, and non-destructive message browsing (via the official `solace-pubsubplus` client), verified against a real broker. See [`adapters/solace/README.md`](adapters/solace/README.md) to run it.
 - **IBM MQ adapter** — Phase 3 complete: queue monitoring (MQSC-over-REST), connectivity + capacity health, and non-destructive message peek (REST Messaging API), verified against a real queue manager. No PCF, no native client. See [`adapters/mq/README.md`](adapters/mq/README.md) to run it.
-- **API layer, UI** — not started. All three broker adapters are now feature-complete.
+- **API layer** — MVP working: a FastAPI service fanning out to all three adapters, serving the unified model as JSON, with graceful per-broker degradation. Live passthrough, not yet the poller+store pipeline from architecture.md §4 — see [`api/README.md`](api/README.md).
+- **UI** — MVP working: React + Vite + TypeScript, both required surfaces (cross-broker Overview, per-resource Drill-down with message peek) built and verified end-to-end in a real browser against real data from all three systems. See [`ui/README.md`](ui/README.md).
 
 ## Layout
 
@@ -67,3 +68,18 @@ python3 -m venv .venv && ./.venv/bin/pip install -e ".[dev]"
 ```
 
 See [`adapters/kafka/README.md`](adapters/kafka/README.md), [`adapters/solace/README.md`](adapters/solace/README.md), and [`adapters/mq/README.md`](adapters/mq/README.md) for the full picture — message peek/browsing, connection flags, and running each test suite.
+
+**Full stack, once the three brokers above are up:**
+
+```bash
+cd api
+python3 -m venv .venv
+./.venv/bin/pip install -e ../adapters/kafka -e ../adapters/solace -e ../adapters/mq -e ".[dev]"
+./.venv/bin/uvicorn api.main:app --port 8010          # in one terminal
+
+cd ui
+npm install
+npm run dev                                            # in another; opens on :5173
+```
+
+See [`api/README.md`](api/README.md) and [`ui/README.md`](ui/README.md) for endpoint details, broker configuration, and what's verified vs. not.
