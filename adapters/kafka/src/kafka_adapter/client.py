@@ -3,9 +3,11 @@ schema (see models.py / /docs/architecture.md §3).
 
 Primary source: the Kafka Admin API, via kafka-python's KafkaAdminClient
 and KafkaConsumer (used here for topic/offset discovery, which the admin
-client doesn't expose as directly). JMX (broker internals, ISR/replication
-detail) is not wired up yet — see the "known gotchas" section of
-adapters/kafka/README.md for what's deferred and why.
+client doesn't expose as directly). Replication/ISR health comes from the
+Admin API's topic metadata too (see replication.py) — JMX turned out not
+to be necessary for that after all, only for broker-resource metrics this
+adapter doesn't cover yet (request latency percentiles, handler idle
+ratio, etc.).
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ from kafka.structs import TopicPartition
 
 from .lag import compute_lag, sum_topic_lag
 from .models import ConsumerGroup, HealthCategory, HealthEvent, HealthSeverity, PartitionLag, Resource
+from .replication import PartitionReplicationStatus, summarize_replication
 
 _INTERNAL_TOPIC_PREFIX = "__"
 
@@ -141,11 +144,7 @@ class KafkaAdapter:
 
     # -- health -----------------------------------------------------------
 
-    def get_health_events(self) -> list[HealthEvent]:
-        """Connectivity check only for now. Broker-level ISR/under-replicated-
-        partition detail needs JMX, which isn't wired up yet — see the
-        adapter README.
-        """
+    def _connectivity_health_event(self) -> HealthEvent:
         try:
             brokers = self._admin._client.cluster.brokers()  # best-effort; not public API
             broker_count = len(list(brokers)) if brokers else 0
@@ -155,12 +154,52 @@ class KafkaAdapter:
             severity = HealthSeverity.WARN
             message = f"could not read cluster metadata: {exc}"
 
-        return [
-            HealthEvent(
-                broker_id=self.broker_id,
-                severity=severity,
-                category=HealthCategory.CONNECTIVITY,
-                message=message,
-                timestamp=_now_iso(),
-            )
-        ]
+        return HealthEvent(
+            broker_id=self.broker_id,
+            severity=severity,
+            category=HealthCategory.CONNECTIVITY,
+            message=message,
+            timestamp=_now_iso(),
+        )
+
+    def _replication_statuses(self) -> list[PartitionReplicationStatus]:
+        """Per-partition replicas/isr/offline_replicas straight from the
+        Admin API's topic metadata (no JMX needed — see replication.py).
+        """
+        topics_metadata = self._admin.describe_topics(topics=None)
+        statuses: list[PartitionReplicationStatus] = []
+        for topic_meta in topics_metadata:
+            topic = topic_meta.get("topic")
+            if not topic or topic.startswith(_INTERNAL_TOPIC_PREFIX):
+                continue
+            for p in topic_meta.get("partitions", []):
+                statuses.append(
+                    PartitionReplicationStatus(
+                        topic=topic,
+                        partition=p["partition"],
+                        replicas=list(p.get("replicas", [])),
+                        isr=list(p.get("isr", [])),
+                        offline_replicas=list(p.get("offline_replicas", [])),
+                    )
+                )
+        return statuses
+
+    def _replication_health_event(self) -> HealthEvent | None:
+        statuses = self._replication_statuses()
+        if not statuses:
+            return None
+        summary = summarize_replication(statuses)
+        return HealthEvent(
+            broker_id=self.broker_id,
+            severity=summary.severity,
+            category=HealthCategory.REPLICATION,
+            message=summary.message,
+            timestamp=_now_iso(),
+        )
+
+    def get_health_events(self) -> list[HealthEvent]:
+        events = [self._connectivity_health_event()]
+        replication_event = self._replication_health_event()
+        if replication_event is not None:
+            events.append(replication_event)
+        return events

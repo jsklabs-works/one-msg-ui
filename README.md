@@ -13,7 +13,7 @@ Each system is fundamentally different (point-to-point queues vs. distributed lo
 
 ## Status
 
-- **Kafka adapter** — MVP working: topic/consumer-group discovery, lag calculation, connectivity health check, and non-destructive message peek, tested against a local Docker Kafka. See [`adapters/kafka/README.md`](adapters/kafka/README.md) to run it. JMX-based broker health detail (ISR/replication) not wired up yet.
+- **Kafka adapter** — Phase 1 complete: topic/consumer-group discovery, lag calculation, connectivity + replication (ISR/under-replicated/offline) health, and non-destructive message peek, tested against a local Docker Kafka. See [`adapters/kafka/README.md`](adapters/kafka/README.md) to run it.
 - **Solace, IBM MQ adapters, API layer, UI** — not started (Phases 2-3 and beyond).
 
 ## Layout

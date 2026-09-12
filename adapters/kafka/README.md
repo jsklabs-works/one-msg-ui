@@ -1,6 +1,6 @@
 # Kafka adapter
 
-**Status:** MVP working (Phase 1) — topic/consumer-group discovery, lag calculation, health connectivity check, and non-destructive message peek are implemented and tested against a local cluster. JMX-based broker internals (ISR/under-replicated-partition detail) are not wired up yet.
+**Status:** Phase 1 complete — topic/consumer-group discovery, lag calculation, connectivity + replication health, and non-destructive message peek are all implemented and tested against a local cluster. Deeper broker-resource metrics (request latency percentiles, handler idle ratio) would need JMX and aren't covered — see Data sources below.
 
 ## Responsibility
 
@@ -8,13 +8,13 @@ Translate Kafka's native monitoring surface into the shared model defined in [`/
 
 - `Resource` — one per topic, with `consumer_lag` populated (Kafka has no native "depth" concept; `depth_current`/`depth_max` stay null)
 - `ConsumerGroup` — group state, member count, and per-partition `{log_end_offset, committed_offset, lag}`
-- `HealthEvent` — broker/ISR/under-replicated-partition issues
+- `HealthEvent` — connectivity (cluster metadata reachable) and replication (ISR/under-replicated/offline-replica status, per partition — see `replication.py`)
 - `MessageSample` — non-destructive peek at a topic/partition's messages (see [`/docs/architecture.md §3.1`](../../docs/architecture.md#31-message-browsingpeek-in-scope-for-v1)): a scratch/no-commit consumer group or `assign()` + manual `seek()`, polling without ever committing offsets
 
 ## Data sources
 
-- **Kafka Admin API** — offsets and consumer group metadata (primary source), via [`kafka-python-ng`](https://pypi.org/project/kafka-python-ng/) (a maintained fork of `kafka-python`; same `kafka` import namespace, but with Python 3.12+ compatibility fixes)
-- **JMX** — broker internals, `records-lag-max` client-side metric, replication/ISR status. **Not implemented yet** — the current `get_health_events()` only reports basic cluster-metadata connectivity, not ISR/under-replication. Add JMX once that detail is actually needed.
+- **Kafka Admin API** — offsets, consumer group metadata, and per-partition `replicas`/`isr`/`offline_replicas` from topic metadata (primary source for everything this adapter does), via [`kafka-python-ng`](https://pypi.org/project/kafka-python-ng/) (a maintained fork of `kafka-python`; same `kafka` import namespace, but with Python 3.12+ compatibility fixes)
+- **JMX** — turned out *not* to be needed for ISR/under-replicated-partition status, contrary to the original architecture doc's assumption: `describe_topics()`'s partition metadata already carries `replicas`/`isr`/`offline_replicas` straight from the same Metadata API a broker-side JMX metric would derive from (see [`replication.py`](src/kafka_adapter/replication.py)). JMX would still matter for broker-resource metrics the Metadata API doesn't expose — request latency percentiles, handler idle ratio — but nothing in this adapter's current scope needs those. Not implemented.
 
 ## Known gotchas to handle
 
@@ -25,13 +25,14 @@ Translate Kafka's native monitoring surface into the shared model defined in [`/
 
 ```
 src/kafka_adapter/
-  models.py   normalized dataclasses (Resource, ConsumerGroup, HealthEvent, MessageSample)
-  client.py   KafkaAdapter — topic/consumer-group discovery, lag calc, health
-  lag.py      pure lag-calculation helpers (unit-tested, no broker needed)
-  peek.py     non-destructive message browsing
-  main.py     CLI entry point (`kafka-adapter topics` / `kafka-adapter peek <topic>`)
+  models.py        normalized dataclasses (Resource, ConsumerGroup, HealthEvent, MessageSample)
+  client.py        KafkaAdapter — topic/consumer-group discovery, lag calc, health
+  lag.py           pure lag-calculation helpers (unit-tested, no broker needed)
+  replication.py   pure ISR/replication classification (unit-tested, no broker needed)
+  peek.py          non-destructive message browsing
+  main.py          CLI entry point (`kafka-adapter topics` / `kafka-adapter peek <topic>`)
 scripts/seed.py   dev-only: creates a test topic + lagging consumer group against docker-compose
-tests/            pytest suite for lag.py and peek.py's pure logic
+tests/            pytest suite for lag.py, replication.py, and peek.py's pure logic
 ```
 
 ## Running it locally
@@ -54,4 +55,6 @@ python3 -m venv .venv && ./.venv/bin/pip install -e ".[dev]"
 
 ## Next step
 
-Decide how this CLI becomes a real service: wire it into the ingestion/poller described in [`/docs/architecture.md §4`](../../docs/architecture.md#4-architecture) (scheduled polling, writing into the metrics/metadata store) rather than being invoked ad hoc. Add JMX-based health detail once broker/ISR monitoring is actually needed.
+Decide how this CLI becomes a real service: wire it into the ingestion/poller described in [`/docs/architecture.md §4`](../../docs/architecture.md#4-architecture) (scheduled polling, writing into the metrics/metadata store) rather than being invoked ad hoc.
+
+Note: the docker-compose cluster is single-broker/replication-factor-1, so under-replicated/offline partitions can't be triggered against it — `replication.py`'s classification logic is verified with synthetic data in `tests/test_replication.py` instead. Confirm against a real multi-broker cluster before relying on it in production.
