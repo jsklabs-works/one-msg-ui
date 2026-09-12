@@ -77,11 +77,11 @@ Message bodies may contain sensitive payload data — `body_preview` should be c
 ## 4. Architecture
 
 ```
-┌─────────────┐   ┌─────────────┐   ┌─────────────┐
-│  MQ Adapter │   │Kafka Adapter│   │Solace Adapter│
-│ (REST+PCF)  │   │(AdminClient │   │  (SEMP v2)   │
-│             │   │  + JMX)     │   │              │
-└──────┬──────┘   └──────┬──────┘   └──────┬───────┘
+┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+│  MQ Adapter  │  │ Kafka Adapter│  │Solace Adapter│
+│  (REST+PCF)  │  │(AdminClient) │  │(SEMP v2+SMF) │
+│  not started │  │     done     │  │     done     │
+└──────┬───────┘  └──────┬───────┘  └──────┬───────┘
        │ normalize to common schema         │
        └───────────────┬─────────────────────┘
                         ▼
@@ -117,7 +117,7 @@ Polling vs. push: all three systems are comfortably poll-based for monitoring pu
 
 Kept ordinary and boring on purpose — this is not the part of the system worth taking risk on:
 
-- **Adapters:** small services (one per broker type), written in whatever language your team already runs in production — Kafka's ecosystem favors Java/Kotlin or Python (`kafka-python`/`confluent-kafka`) for the Admin client; MQ and Solace both have first-class REST clients so any language works there.
+- **Adapters:** small services (one per broker type), written in whatever language your team already runs in production — Kafka's ecosystem favors Java/Kotlin or Python (`kafka-python`/`confluent-kafka`) for the Admin client; MQ and Solace both have first-class REST clients so any language works there. *Implementation note:* Kafka and Solace were both built in Python (`kafka-python-ng`, `requests` + the official `solace-pubsubplus` client) — fast to iterate, no build step, and both installed cleanly with no native-dependency friction on the dev machine. Follow suit for IBM MQ (Phase 3) for consistency unless something about MQ's client libraries makes that a bad fit.
 - **Metrics storage:** Prometheus is the pragmatic default — community exporters already exist for Solace (`solace-prometheus-exporter`) and for Kafka (`kafka-exporter`, JMX exporter), so two of three adapters can start as "run the existing exporter + a thin normalization shim" rather than from scratch. IBM MQ has community and IBM-supported Prometheus exporters too.
 - **Metadata / config store:** small relational DB (broker inventory, thresholds, encrypted broker credentials) — Postgres is fine. See §7 for the credential-storage decision.
 - **API layer:** REST or GraphQL over the normalized model; GraphQL is worth it if the UI needs to query "all resources across all brokers above 80% depth" type cross-cutting views often.

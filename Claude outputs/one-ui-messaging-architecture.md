@@ -1,5 +1,7 @@
 # One UI for Messaging — Unified Monitoring Architecture
 
+> **Historical snapshot.** This is the original architecture draft, kept as-is for reference. The living version — with resolved open questions, the message-browsing scope addition, and corrections from actually building the Kafka and Solace adapters — is [`/docs/architecture.md`](../docs/architecture.md). Read that one, not this one.
+
 **Scope:** A single monitoring console covering IBM MQ, Apache Kafka, and Solace PubSub+, showing queue/topic depth, consumer lag, and broker/system health.
 **Not in scope (v1):** admin actions (create/delete queues, ACL changes), message browsing/replay, produce/consume of test messages. These are natural v2 candidates once the monitoring layer proves out — see Phase 4.
 

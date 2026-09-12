@@ -36,6 +36,8 @@ Per the architecture doc's phased rollout: **Kafka first** (Phase 1), then Solac
 
 ## Getting started
 
+**Kafka** (self-contained — spins up its own local broker):
+
 ```bash
 docker compose up -d          # local single-node Kafka (KRaft, no ZooKeeper)
 cd adapters/kafka
@@ -44,4 +46,13 @@ python3 -m venv .venv && ./.venv/bin/pip install -e ".[dev]"
 ./.venv/bin/python -m kafka_adapter.main topics
 ```
 
-See [`adapters/kafka/README.md`](adapters/kafka/README.md) for the full picture, including message peek and running the test suite.
+**Solace** (needs a broker you already have, or a local Solace PubSub+ Docker container — not bundled in this repo's docker-compose):
+
+```bash
+cd adapters/solace
+python3 -m venv .venv && ./.venv/bin/pip install -e ".[dev]"
+./.venv/bin/python scripts/seed.py                    # optional: sample data
+./.venv/bin/python -m solace_adapter.main queues
+```
+
+See [`adapters/kafka/README.md`](adapters/kafka/README.md) and [`adapters/solace/README.md`](adapters/solace/README.md) for the full picture — message peek/browsing, connection flags, and running each test suite.
