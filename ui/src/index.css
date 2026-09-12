@@ -112,6 +112,9 @@ button[type="submit"] {
 }
 button[type="submit"]:hover:not(:disabled) { background: #4c94e8; border-color: #4c94e8; }
 
+.button-danger { color: #ef8582; border-color: rgba(208, 59, 59, 0.4); }
+.button-danger:hover:not(:disabled) { background: rgba(208, 59, 59, 0.14); border-color: var(--status-critical); }
+
 select, input[type="number"], input[type="text"], input[type="password"] {
   background: var(--page);
   color: var(--ink-primary);
@@ -133,6 +136,44 @@ select:focus, input:focus { outline: none; border-color: var(--accent); }
   margin-bottom: 18px;
   font-size: 0.9rem;
 }
+
+/* -- Tab bar -------------------------------------------------------------
+   Real routes, not client-side-only tab state — open a second browser
+   tab on a different /brokers/:id URL to inspect two brokers at once. */
+
+.tab-bar {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 22px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 16px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--ink-muted);
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+.tab:hover { color: var(--ink-primary); text-decoration: none; }
+.tab-active { color: var(--ink-primary); border-bottom-color: var(--accent); }
+
+.tab-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.tab-dot.status-good { background: var(--status-good); }
+.tab-dot.status-warning { background: var(--status-warning); }
+.tab-dot.status-critical { background: var(--status-critical); }
 
 /* -- Stats summary ----------------------------------------------------- */
 

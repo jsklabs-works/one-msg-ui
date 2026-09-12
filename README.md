@@ -17,7 +17,7 @@ Each system is fundamentally different (point-to-point queues vs. distributed lo
 - **Solace adapter** — Phase 2 complete: VPN/queue monitoring (SEMP v2), connectivity + spool-usage health, and non-destructive message browsing (via the official `solace-pubsubplus` client), verified against a real broker. See [`adapters/solace/README.md`](adapters/solace/README.md) to run it.
 - **IBM MQ adapter** — Phase 3 complete: queue monitoring (MQSC-over-REST), connectivity + capacity health, and non-destructive message peek (REST Messaging API), verified against a real queue manager. No PCF, no native client. See [`adapters/mq/README.md`](adapters/mq/README.md) to run it.
 - **API layer** — MVP working: a FastAPI service fanning out to all three adapters, serving the unified model as JSON, with graceful per-broker degradation. Live passthrough, not yet the poller+store pipeline from architecture.md §4 — see [`api/README.md`](api/README.md).
-- **UI** — MVP working: React + Vite + TypeScript, both required surfaces (cross-broker Overview, per-resource Drill-down with message peek) built and verified end-to-end in a real browser against real data from all three systems. See [`ui/README.md`](ui/README.md).
+- **UI** — MVP working: React + Vite + TypeScript, tabbed (a Dashboard tab plus one real-route tab per connected broker, so multiple brokers can be inspected simultaneously in separate browser tabs), with per-resource drill-down and message peek. Built and verified end-to-end in a real browser against real data from all three systems. See [`ui/README.md`](ui/README.md).
 
 ## Layout
 
