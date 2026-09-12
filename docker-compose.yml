@@ -24,6 +24,32 @@ services:
       timeout: 5s
       retries: 20
 
+  # Local dev queue manager for the MQ adapter (Phase 3). Developer-license
+  # image — see adapters/mq/README.md for how to point the adapter at this.
+  # Default admin: admin/adminpassw0rd. Default app user: app/apppassw0rd.
+  # Default queue manager: QM1. Dev-mode ships a default DEV.QUEUE.1 queue
+  # plus a DEV.APP.SVRCONN channel, both auto-created.
+  mq:
+    image: icr.io/ibm-messaging/mq:latest
+    platform: linux/amd64  # IBM ships amd64-only images; emulated via Rosetta/QEMU on Apple Silicon
+    container_name: one-msg-ui-mq
+    ports:
+      - "1414:1414"   # MQ listener (MQI protocol)
+      - "9543:9443"   # HTTPS web console + REST Admin/Messaging APIs
+    environment:
+      LICENSE: accept
+      MQ_QMGR_NAME: QM1
+      MQ_ADMIN_PASSWORD: adminpassw0rd
+      MQ_APP_PASSWORD: apppassw0rd
+    healthcheck:
+      # No curl/wget in this image (verified via `docker exec ... which curl`),
+      # so check queue manager status with MQ's own dspmq CLI instead — it's
+      # always present and needs no auth flags to get wrong.
+      test: ["CMD-SHELL", "dspmq -m QM1 | grep -qi 'STATUS(Running)' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+
 # No Solace service here (Phase 2): this dev machine already runs a
 # standalone Solace PubSub+ broker (container "pubSubStandardSingleNode",
 # not managed by this docker-compose file) at the default ports —

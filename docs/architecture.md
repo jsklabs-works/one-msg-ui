@@ -21,14 +21,14 @@ Because "queue depth," "consumer lag," and "health" mean structurally different 
 
 | System | Primary monitoring API | Format | Auth | Key metrics exposed |
 |---|---|---|---|---|
-| **IBM MQ** | REST Admin API (`/ibmmq/rest/v1/admin/qmgr/{qmgr}/...`); PCF (Programmatic Command Format) for anything not yet in REST | JSON (REST) / binary MQI messages (PCF) | Basic auth, or bearer/OAuth via Cloud Pak; mTLS for transport | Queue depth (`CURDEPTH`), max depth, channel status, queue manager status, connection counts |
+| **IBM MQ** | REST Admin API, but not its plain resource endpoints (those are config-only — `curdepth`/`maxdepth` are rejected there). Runtime status instead comes via **MQSC-over-REST** (`POST /ibmmq/rest/v1/admin/action/qmgr/{qmgr}/mqsc`, running a real MQSC command and returning its console text output). No PCF or native client needed — confirmed in Phase 3, see adapter note below. | JSON request, free-text MQSC console output in the response (needs parsing — see `mqsc.py`) | Basic auth, or bearer/OAuth via Cloud Pak; mTLS for transport | Queue depth (`CURDEPTH`), max depth, queue manager status, open input/output handle counts |
 | **Apache Kafka** | Kafka Admin API (offsets, group metadata, **and** per-partition replica/ISR/offline-replica state via topic metadata — ISR/under-replication does *not* need JMX, see adapter note below); JMX only for broker-internal metrics the Metadata API doesn't carry (request latency percentiles, handler idle ratio); `kafka-consumer-groups` CLI wraps the Admin API | Binary protocol / JMX MBeans; CLI output is text/JSON | SASL/SCRAM, mTLS, or Kerberos depending on cluster config | Log-end-offset vs. committed-offset per partition (→ lag), broker ISR/under-replicated-partition counts (Admin API), request/response latency (JMX) |
 | **Solace PubSub+** | SEMP v2 **monitor** API (`GET /SEMP/v2/monitor/...`) | JSON (REST) | Basic auth or mTLS against the broker's management plane | Per-queue spooled messages/bytes, discards, redelivery counts; per-VPN throughput and spool usage; broker-level health, memory, spool usage, uptime |
 
 Notable gotchas worth designing around:
 
 - **Kafka lag is not always reliable.** Consumers using manual `assign()` rather than group `subscribe()` don't report lag through the standard group-metadata path; groups that go `EMPTY` for over a day stop emitting lag metrics entirely. The adapter needs a fallback (compute lag directly from log-end-offset vs. last-committed-offset via the Admin API) rather than trusting a single source.
-- **IBM MQ's REST API doesn't cover 100% of PCF's surface.** Some queue/channel attributes are REST-only in recent versions, others still require PCF. The adapter should be built REST-first with a PCF fallback path, not PCF-first.
+- **IBM MQ's plain REST resource endpoints are config-only, not runtime status.** Confirmed in Phase 3: `GET .../queue/{name}?attributes=curdepth` is rejected outright — no PCF fallback was actually needed, though; MQSC-over-REST (see table row above and [`adapters/mq/README.md`](../adapters/mq/README.md)) covered every runtime attribute this project needed.
 - **Solace scoping is two-level** (VPN → queue/topic), so the normalized model needs a VPN/namespace concept that MQ and Kafka don't have — don't flatten it away, or multi-tenant Solace brokers become unreadable in the UI.
 
 ---
@@ -66,7 +66,7 @@ Design rationale: rather than inventing a single "queue depth" field that's forc
 
 A non-destructive "what's actually on this queue?" view — the most common support-ticket need — without consuming or altering anything. Per-system mechanics differ enough to call out explicitly:
 
-- **IBM MQ** — REST Admin API supports browse-mode `GET` on a queue (non-destructive get, doesn't advance the queue). Well-supported, build this first.
+- **IBM MQ** — confirmed in Phase 3: the REST *Messaging* API's plain `GET .../queue/{q}/message` is non-destructive by default — verified with 2 distinct messages and repeated GETs, depth never changed. No special "browse" parameter needed or available. Real limitation: no browse cursor — it always returns the same head-of-queue (oldest) message, so this adapter can only ever peek one message per queue, not the next N like Kafka/Solace. A true multi-message browse needs `MQGMO_BROWSE_NEXT` via MQI/pymqi, deliberately not used to avoid that native-dependency risk.
 - **Kafka** — a consumer with a scratch/no-commit group (or `assign()` + manual `seek()`), poll without committing offsets. Non-destructive as long as no group-commit happens; the adapter must guarantee it never commits on the browse path.
 - **Solace** — confirmed in Phase 2 (see [`adapters/solace/README.md`](../adapters/solace/README.md)): SEMP v2 *does* have queue message-inspection endpoints (`/queues/{q}/msgs`), but they return metadata only (id, size, timestamp) — never the body. Peeking the actual payload needs a real client-protocol connection; the official `solace-pubsubplus` Python client's `MessageQueueBrowser` provides a proper broker-native non-destructive browse (verified: spooled count unchanged after browsing). This is a second connection type (SMF) alongside the SEMP-based monitoring connection — extra adapter complexity as flagged, but a well-supported path, not a workaround.
 
@@ -79,8 +79,9 @@ Message bodies may contain sensitive payload data — `body_preview` should be c
 ```
 ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
 │  MQ Adapter  │  │ Kafka Adapter│  │Solace Adapter│
-│  (REST+PCF)  │  │(AdminClient) │  │(SEMP v2+SMF) │
-│  not started │  │     done     │  │     done     │
+│(MQSC-over-   │  │(AdminClient) │  │(SEMP v2+SMF) │
+│    REST)     │  │              │  │              │
+│     done     │  │     done     │  │     done     │
 └──────┬───────┘  └──────┬───────┘  └──────┬───────┘
        │ normalize to common schema         │
        └───────────────┬─────────────────────┘
@@ -117,7 +118,7 @@ Polling vs. push: all three systems are comfortably poll-based for monitoring pu
 
 Kept ordinary and boring on purpose — this is not the part of the system worth taking risk on:
 
-- **Adapters:** small services (one per broker type), written in whatever language your team already runs in production — Kafka's ecosystem favors Java/Kotlin or Python (`kafka-python`/`confluent-kafka`) for the Admin client; MQ and Solace both have first-class REST clients so any language works there. *Implementation note:* Kafka and Solace were both built in Python (`kafka-python-ng`, `requests` + the official `solace-pubsubplus` client) — fast to iterate, no build step, and both installed cleanly with no native-dependency friction on the dev machine. Follow suit for IBM MQ (Phase 3) for consistency unless something about MQ's client libraries makes that a bad fit.
+- **Adapters:** small services (one per broker type), written in whatever language your team already runs in production — Kafka's ecosystem favors Java/Kotlin or Python (`kafka-python`/`confluent-kafka`) for the Admin client; MQ and Solace both have first-class REST clients so any language works there. *Implementation note:* all three adapters were built in Python (`kafka-python-ng`; `requests` + the official `solace-pubsubplus` client; `requests` alone for MQ) — fast to iterate, no build step, and none needed a native-dependency workaround (MQ's PCF/pymqi path, assumed necessary going in, turned out unnecessary — see §2's table).
 - **Metrics storage:** Prometheus is the pragmatic default — community exporters already exist for Solace (`solace-prometheus-exporter`) and for Kafka (`kafka-exporter`, JMX exporter), so two of three adapters can start as "run the existing exporter + a thin normalization shim" rather than from scratch. IBM MQ has community and IBM-supported Prometheus exporters too.
 - **Metadata / config store:** small relational DB (broker inventory, thresholds, encrypted broker credentials) — Postgres is fine. See §7 for the credential-storage decision.
 - **API layer:** REST or GraphQL over the normalized model; GraphQL is worth it if the UI needs to query "all resources across all brokers above 80% depth" type cross-cutting views often.
@@ -129,8 +130,8 @@ Kept ordinary and boring on purpose — this is not the part of the system worth
 
 1. **Phase 1 — Kafka only. Done.** Best-documented Admin API, richest existing tooling (exporters, `kafka-consumer-groups` CLI to validate against), and consumer lag is the metric most teams care about most urgently. Adapter pattern and normalized schema proved out end-to-end — see [`adapters/kafka/README.md`](../adapters/kafka/README.md).
 2. **Phase 2 — Add Solace. Done.** REST-based (SEMP v2) for monitoring; VPN/namespace concept validated in the data model. Message browsing needed a separate client-protocol connection as anticipated (see §3.1) — the official `solace-pubsubplus` client's `MessageQueueBrowser` covers it well.
-3. **Phase 3 — Add IBM MQ.** REST Admin API first; identify which specific attributes your environment needs that are PCF-only, and add a PCF fallback path only for those rather than building full PCF support speculatively.
-4. **Phase 4 — Expand scope**, informed by what Phase 1–3 actually needed: admin actions, produce/consume test tooling, additional broker types (RabbitMQ, ActiveMQ, Azure Service Bus, SQS/SNS). (Message browsing/inspection moved into v1 scope — see §3.1 and §7.)
+3. **Phase 3 — Add IBM MQ. Done.** REST Admin API's plain resource endpoints turned out to be config-only; runtime status (depth, qmgr state) needed MQSC-over-REST instead (see §2). No PCF fallback was needed at all. Message peek uses the REST Messaging API's plain GET, confirmed non-destructive by default — see §3.1 for the real limitation (no browse cursor, one message per queue).
+4. **Phase 4 — Expand scope**, informed by what Phase 1–3 actually needed: admin actions, produce/consume test tooling, additional broker types (RabbitMQ, ActiveMQ, Azure Service Bus, SQS/SNS). (Message browsing/inspection moved into v1 scope — see §3.1 and §7.) All three broker adapters (Phase 1-3) are feature-complete; the unified API layer and UI are next.
 
 Kafka-first is a deliberate choice against your original "IBM MQ, Kafka, Solace" ordering — it's the one where getting the abstraction right matters most (since it's the most different from the other two), so it's worth validating the model against the hardest case before the easier ones.
 

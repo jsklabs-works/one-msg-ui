@@ -15,7 +15,8 @@ Each system is fundamentally different (point-to-point queues vs. distributed lo
 
 - **Kafka adapter** — Phase 1 complete: topic/consumer-group discovery, lag calculation, connectivity + replication (ISR/under-replicated/offline) health, and non-destructive message peek, tested against a local Docker Kafka. See [`adapters/kafka/README.md`](adapters/kafka/README.md) to run it.
 - **Solace adapter** — Phase 2 complete: VPN/queue monitoring (SEMP v2), connectivity + spool-usage health, and non-destructive message browsing (via the official `solace-pubsubplus` client), verified against a real broker. See [`adapters/solace/README.md`](adapters/solace/README.md) to run it.
-- **IBM MQ adapter, API layer, UI** — not started (Phase 3 and beyond).
+- **IBM MQ adapter** — Phase 3 complete: queue monitoring (MQSC-over-REST), connectivity + capacity health, and non-destructive message peek (REST Messaging API), verified against a real queue manager. No PCF, no native client. See [`adapters/mq/README.md`](adapters/mq/README.md) to run it.
+- **API layer, UI** — not started. All three broker adapters are now feature-complete.
 
 ## Layout
 
@@ -55,4 +56,14 @@ python3 -m venv .venv && ./.venv/bin/pip install -e ".[dev]"
 ./.venv/bin/python -m solace_adapter.main queues
 ```
 
-See [`adapters/kafka/README.md`](adapters/kafka/README.md) and [`adapters/solace/README.md`](adapters/solace/README.md) for the full picture — message peek/browsing, connection flags, and running each test suite.
+**IBM MQ** (self-contained — spins up its own local queue manager; amd64-only image, emulated on Apple Silicon so startup is slower):
+
+```bash
+docker compose up -d mq       # local queue manager (QM1)
+cd adapters/mq
+python3 -m venv .venv && ./.venv/bin/pip install -e ".[dev]"
+./.venv/bin/python scripts/seed.py                    # optional: sample data
+./.venv/bin/python -m mq_adapter.main queues --pattern "DEV.*"
+```
+
+See [`adapters/kafka/README.md`](adapters/kafka/README.md), [`adapters/solace/README.md`](adapters/solace/README.md), and [`adapters/mq/README.md`](adapters/mq/README.md) for the full picture — message peek/browsing, connection flags, and running each test suite.
