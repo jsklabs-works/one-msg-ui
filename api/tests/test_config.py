@@ -109,5 +109,17 @@ def test_connection_identity_rabbitmq_distinguishes_different_api_url():
     assert a != b
 
 
+def test_connection_identity_activemq_ignores_trailing_slash_case_and_credentials():
+    a = connection_identity("activemq", {"console_url": "HTTP://Localhost:8161/", "username": "u1"})
+    b = connection_identity("activemq", {"console_url": "http://localhost:8161", "username": "u2"})
+    assert a == b
+
+
+def test_connection_identity_activemq_distinguishes_different_console_url():
+    a = connection_identity("activemq", {"console_url": "http://host1:8161"})
+    b = connection_identity("activemq", {"console_url": "http://host2:8161"})
+    assert a != b
+
+
 def test_connection_identity_unknown_type_returns_empty_tuple():
     assert connection_identity("bogus", {"anything": "x"}) == ()

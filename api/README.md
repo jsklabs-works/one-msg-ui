@@ -1,6 +1,6 @@
 # Unified API layer
 
-**Status:** MVP working — a FastAPI service that fans out to all four broker adapters and serves the normalized model (`Broker`, `Resource`, `ConsumerGroup`, `HealthEvent`, `MessageSample`) as JSON, verified end-to-end against the same four real local brokers the adapters were each verified against.
+**Status:** MVP working — a FastAPI service that fans out to all five broker adapters and serves the normalized model (`Broker`, `Resource`, `ConsumerGroup`, `HealthEvent`, `MessageSample`) as JSON, verified end-to-end against the same five real local brokers the adapters were each verified against.
 
 ## Responsibility
 
@@ -17,15 +17,15 @@ Serves the normalized model (see [`/docs/architecture.md`](../docs/architecture.
 | `GET /api/resources/{resource_id}` | One resource (404 if not found) |
 | `GET /api/health` | All health events. Filter with `?broker_id=` |
 | `GET /api/consumer-groups` | Kafka consumer groups (empty for non-Kafka brokers). Filter with `?broker_id=` |
-| `GET /api/resources/{resource_id}/messages?limit=N` | Non-destructive peek — architecture.md §3.1. Kafka/Solace/RabbitMQ can return up to `limit`; MQ can only ever return the one oldest message (see [`adapters/mq/README.md`](../adapters/mq/README.md)) |
+| `GET /api/resources/{resource_id}/messages?limit=N` | Non-destructive peek — architecture.md §3.1. Kafka/Solace/RabbitMQ/ActiveMQ can return up to `limit`; MQ can only ever return the one oldest message (see [`adapters/mq/README.md`](../adapters/mq/README.md)) |
 | `POST /api/resources/{resource_id}/messages` `{limit, username, password}` | Same peek, but with credentials for just this call instead of the broker's saved config — a password has no business in a URL query string, hence POST. For when the broker's saved credentials don't work for this specific resource (see next section) |
-| `GET /api/system-types` | The broker types this instance can connect to (today: Kafka, Solace, MQ, RabbitMQ) plus each one's real connection `fields` — drives the UI's "add broker" form dynamically, see [`config.py`](src/api/config.py)'s `FIELD_SPECS` |
+| `GET /api/system-types` | The broker types this instance can connect to (today: Kafka, Solace, MQ, RabbitMQ, ActiveMQ) plus each one's real connection `fields` — drives the UI's "add broker" form dynamically, see [`config.py`](src/api/config.py)'s `FIELD_SPECS` |
 | `POST /api/brokers` | Add a broker: `{type, name, environment, config}`. Rejects a duplicate display name or a second connection to the same physical broker with 409 (see below), then actually tries to connect before saving anything (422 with the real error if it fails) — see [`aggregator.py`](src/api/aggregator.py)'s `test_connection()` |
 | `POST /api/brokers/import` | Bulk add: `{brokers: [{type, name, environment, config}, ...]}` — the same shape as [`config/brokers.json`](config/brokers.json) itself, so that file can be uploaded as-is. Runs every check `POST /api/brokers` does, per entry, but never fails the whole request on one bad entry — always 200, with one `{name, type, status, detail, broker}` result per entry (`status` one of `added`/`duplicate_name`/`duplicate_connection`/`invalid`/`connection_failed`) — see [`main.py`](src/api/main.py)'s `_add_one_broker()` |
 | `GET /api/brokers/export` | The other half of the round trip: `{brokers: [{id, type, name, environment, config}, ...]}` — every configured broker, full connection config (credentials included) — in exactly `config/brokers.json`'s own shape, so it can be fed straight back into `POST /api/brokers/import` or saved as another instance's `config/brokers.json` unchanged |
 | `DELETE /api/brokers/{broker_id}` | Forget a broker (just the connection entry — never touches the broker itself) |
 
-A broker that's unreachable is reported with `status: "down"` and a `critical`/`connectivity` `HealthEvent` rather than failing the whole request — see [`aggregator.py`](src/api/aggregator.py)'s `fetch_all()`. Three-out-of-four brokers responding is more useful to an on-call engineer than a blank screen.
+A broker that's unreachable is reported with `status: "down"` and a `critical`/`connectivity` `HealthEvent` rather than failing the whole request — see [`aggregator.py`](src/api/aggregator.py)'s `fetch_all()`. Four-out-of-five brokers responding is more useful to an on-call engineer than a blank screen.
 
 ## Broker configuration
 
@@ -39,6 +39,7 @@ Each `FIELD_SPECS` entry includes the real security options each adapter now act
 - **Solace** — `verify_certificate` (default on; uncheck for a broker with a self-signed cert). Wired to the SEMP client's `requests.Session.verify` and, for message peek, a real `solace.messaging.config.transport_security_strategy.TLS` strategy on the SMF connection.
 - **MQ** — `verify_tls` (default off, matching the dev queue manager's self-signed cert). `MQAdapter` already accepted this; it just wasn't exposed or configurable from here before.
 - **RabbitMQ** — `verify_certificate` (default on; uncheck for a broker with a self-signed cert), same convention as Solace's field of the same name — one credential set covers both monitoring and peek here, so there's no separate app/admin split like MQ's.
+- **ActiveMQ** — `verify_certificate` (default on), same convention as Solace/RabbitMQ — one credential set (basic auth against Jolokia) covers both monitoring and peek.
 
 Not covered: mTLS (client certificates), Kerberos, and SASL mechanisms beyond PLAIN. Add `FIELD_SPECS` entries and the matching adapter support if a real broker needs those.
 
@@ -47,7 +48,7 @@ Not covered: mTLS (client certificates), Kerberos, and SASL mechanisms beyond PL
 Adding a broker checks two different things, both before anything is persisted or connected to:
 
 1. **Duplicate display name** — a second broker named the same as an existing one (409, `"a broker named '...' already exists"`).
-2. **Duplicate connection** — a second broker pointed at the *same physical endpoint* as an existing one, whatever it's named — e.g. two Solace entries with the same SEMP URL, two Kafka entries with the same `bootstrap_servers`, two RabbitMQ entries with the same management API URL, or two MQ entries with the same admin URL *and* queue manager name (409, `"... broker '...' already points at this same connection"`).
+2. **Duplicate connection** — a second broker pointed at the *same physical endpoint* as an existing one, whatever it's named — e.g. two Solace entries with the same SEMP URL, two Kafka entries with the same `bootstrap_servers`, two RabbitMQ entries with the same management API URL, two ActiveMQ entries with the same console URL, or two MQ entries with the same admin URL *and* queue manager name (409, `"... broker '...' already points at this same connection"`).
 
 The identity check ([`config.connection_identity`](src/api/config.py), used by [`aggregator.BrokerRegistry.find_duplicate`](src/api/aggregator.py)) is deliberately narrower than "identical config": different credentials or a different Solace VPN filter on the same SEMP URL is still a legitimate second connection (that's the whole point of the per-resource peek credentials below), and two MQ queue managers on the same host are two different brokers. Only the fields that actually identify *which broker* a connection reaches are compared, normalized for case/whitespace/trailing slash so `http://localhost:8080` and `HTTP://Localhost:8080/` are correctly seen as the same broker.
 
@@ -55,7 +56,7 @@ The identity check ([`config.connection_identity`](src/api/config.py), used by [
 
 One broker config stores one set of credentials, but that's not always enough for peek specifically: Solace is the concrete case — SEMP admin credentials are broker-wide (that's what makes [multi-VPN discovery](../adapters/solace/README.md) work at all), but an SMF connection for peek authenticates *per VPN*, and a VPN can genuinely need a different username/password than the broker's saved ones. Rather than force every VPN under one connection to share credentials (defeating the point of discovering them dynamically) or fail with no recourse, [`aggregator.peek()`](src/api/aggregator.py) takes optional `override_username`/`override_password` — used for that one call only, never persisted to `config/brokers.json`. The UI prompts for these inline whenever a peek failure looks credentials-related (see [`ui/README.md`](../ui/README.md)).
 
-The override is wired identically across all four adapter types (Solace's SMF login, MQ's app credentials, Kafka's SASL credentials, RabbitMQ's management API credentials), each with its own test in [`tests/test_aggregator.py`](tests/test_aggregator.py) proving the saved config's credentials are never touched when an override is given. Verified live end-to-end for both Solace (a genuinely unauthorized VPN, `testVPN`) and MQ (deliberately broke `app_password` in the config, confirmed the prompt appeared, retried with the correct password, confirmed it recovered, then restored the config) — a full break → prompt → recover cycle, not just a unit test. Kafka's local dev cluster runs PLAINTEXT with no auth to fail against, and RabbitMQ's peek is unit-tested the same way; the wiring is identical to the verified two for whenever a real cluster/broker needs auth.
+The override is wired identically across all five adapter types (Solace's SMF login, MQ's app credentials, Kafka's SASL credentials, RabbitMQ's management API credentials, ActiveMQ's Jolokia credentials), each with its own test in [`tests/test_aggregator.py`](tests/test_aggregator.py) proving the saved config's credentials are never touched when an override is given. Verified live end-to-end for both Solace (a genuinely unauthorized VPN, `testVPN`) and MQ (deliberately broke `app_password` in the config, confirmed the prompt appeared, retried with the correct password, confirmed it recovered, then restored the config) — a full break → prompt → recover cycle, not just a unit test. Kafka's local dev cluster runs PLAINTEXT with no auth to fail against, and RabbitMQ's/ActiveMQ's peek are unit-tested the same way; the wiring is identical to the verified two for whenever a real cluster/broker needs auth.
 
 ## Layout
 
@@ -64,7 +65,7 @@ src/api/
   models.py      the unified pydantic models (the actual shared schema, made real)
   config.py      loads/saves config/brokers.json, FIELD_SPECS (drives the "add broker" form), validation
   normalize.py   pure per-adapter-type -> unified-model conversion functions
-  aggregator.py  BrokerRegistry — fans out to the four adapters, handles broker-down gracefully,
+  aggregator.py  BrokerRegistry — fans out to the five adapters, handles broker-down gracefully,
                  add/remove/test_connection for broker management
   main.py        FastAPI app and routes
 config/brokers.json   broker inventory for local dev (see note above)
@@ -75,12 +76,12 @@ tests/                pytest suite: normalize.py against real adapter dataclasse
 
 ## Running it locally
 
-Needs all four adapters' dev brokers up first (Kafka, MQ, and RabbitMQ via this repo's `docker-compose.yml`; Solace per its own README).
+Needs all five adapters' dev brokers up first (Kafka, MQ, RabbitMQ, and ActiveMQ via this repo's `docker-compose.yml`; Solace per its own README).
 
 ```bash
 cd api
 python3 -m venv .venv
-./.venv/bin/pip install -e ../adapters/kafka -e ../adapters/solace -e ../adapters/mq -e ../adapters/rabbitmq -e ".[dev]"
+./.venv/bin/pip install -e ../adapters/kafka -e ../adapters/solace -e ../adapters/mq -e ../adapters/rabbitmq -e ../adapters/activemq -e ".[dev]"
 
 ./.venv/bin/uvicorn api.main:app --reload --port 8010
 # NOTE: something on this machine's Docker networking already claims :8000

@@ -46,6 +46,17 @@
         "username": "admin",
         "password": "admin"
       }
+    },
+    {
+      "id": "local-activemq",
+      "type": "activemq",
+      "name": "Local ActiveMQ",
+      "environment": "dev",
+      "config": {
+        "console_url": "http://localhost:8161",
+        "username": "admin",
+        "password": "admin"
+      }
     }
   ]
 }

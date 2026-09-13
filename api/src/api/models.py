@@ -14,7 +14,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-SystemType = Literal["kafka", "solace", "mq", "rabbitmq"]
+SystemType = Literal["kafka", "solace", "mq", "rabbitmq", "activemq"]
 BrokerStatus = Literal["up", "down", "degraded"]
 HealthSeverity = Literal["ok", "warn", "critical"]
 HealthCategory = Literal["connectivity", "capacity", "replication", "spool"]

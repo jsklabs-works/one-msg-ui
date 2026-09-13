@@ -82,6 +82,7 @@ export default function Dashboard() {
             <option value="solace">Solace</option>
             <option value="mq">IBM MQ</option>
             <option value="rabbitmq">RabbitMQ</option>
+            <option value="activemq">ActiveMQ</option>
           </select>
         </label>
       </section>

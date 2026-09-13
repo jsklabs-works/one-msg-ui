@@ -156,6 +156,23 @@ class BrokerRegistry:
         finally:
             adapter.close()
 
+    def _fetch_activemq(self, bc: BrokerConfig):
+        from activemq_adapter.client import ActiveMQAdapter
+
+        adapter = ActiveMQAdapter(
+            broker_id=bc.id,
+            base_url=bc.config["console_url"],
+            username=bc.config["username"],
+            password=bc.config["password"],
+            verify_certificate=config_bool(bc.config, "verify_certificate", True),
+        )
+        try:
+            resources = [normalize.activemq_resource(r, bc.id) for r in adapter.get_resources()]
+            health = [normalize.activemq_health_event(h, bc.id) for h in adapter.get_health_events()]
+            return resources, health, []
+        finally:
+            adapter.close()
+
     def _fetch_mq(self, bc: BrokerConfig):
         from mq_adapter.client import MQAdapter
 
@@ -178,7 +195,13 @@ class BrokerRegistry:
     # Method *names*, looked up via getattr at call time — not the bound
     # methods themselves, so that patching a method on the class (as the
     # tests do) actually takes effect.
-    _FETCHER_NAMES = {"kafka": "_fetch_kafka", "solace": "_fetch_solace", "mq": "_fetch_mq", "rabbitmq": "_fetch_rabbitmq"}
+    _FETCHER_NAMES = {
+        "kafka": "_fetch_kafka",
+        "solace": "_fetch_solace",
+        "mq": "_fetch_mq",
+        "rabbitmq": "_fetch_rabbitmq",
+        "activemq": "_fetch_activemq",
+    }
 
     def fetch_all(self) -> tuple[list[models.Broker], list[models.Resource], list[models.HealthEvent], list[models.ConsumerGroup]]:
         brokers: list[models.Broker] = []
@@ -312,5 +335,29 @@ class BrokerRegistry:
             finally:
                 session.close()
             return [normalize.rabbitmq_message_sample(m) for m in samples]
+
+        if bc.type == "activemq":
+            import requests
+
+            from activemq_adapter.peek import peek_messages
+
+            session = requests.Session()
+            session.auth = (override_username or bc.config["username"], override_password if override_username else bc.config["password"])
+            session.verify = config_bool(bc.config, "verify_certificate", True)
+            try:
+                samples = peek_messages(
+                    session=session,
+                    base_url=bc.config["console_url"],
+                    # The resource's own address, not re-derived from
+                    # anything on the broker config — Artemis has no
+                    # broker-level namespace filter to fall back to.
+                    address=resource.namespace,
+                    queue_name=resource.name,
+                    resource_id=resource.id,
+                    limit=limit,
+                )
+            finally:
+                session.close()
+            return [normalize.activemq_message_sample(m) for m in samples]
 
         raise ValueError(f"unknown broker type: {bc.type}")

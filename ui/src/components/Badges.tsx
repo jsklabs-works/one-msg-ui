@@ -5,6 +5,7 @@ const SYSTEM_LABELS: Record<SystemType, string> = {
   solace: "Solace",
   mq: "IBM MQ",
   rabbitmq: "RabbitMQ",
+  activemq: "ActiveMQ",
 };
 
 export function SystemTypeBadge({ systemType }: { systemType: SystemType }) {

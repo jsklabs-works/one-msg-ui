@@ -42,6 +42,7 @@
   --cat-orange: #eb6834;
   --cat-aqua: #1baf7a;
   --cat-yellow: #eda100;
+  --cat-magenta: #e87ba4;
 
   /* Badge bg/fg pairs, tuned per mode for contrast on that mode's surface
      rather than reusing one hue for both a light and a dark background. */
@@ -53,6 +54,8 @@
   --badge-mq-fg: #b84f22;
   --badge-rabbitmq-bg: rgba(237, 161, 0, 0.18);
   --badge-rabbitmq-fg: #8a6100;
+  --badge-activemq-bg: rgba(232, 123, 164, 0.18);
+  --badge-activemq-fg: #a13360;
   --badge-good-bg: rgba(12, 163, 12, 0.12);
   --badge-good-fg: #006300; /* palette's light "success text" token */
   --badge-warn-bg: rgba(250, 178, 25, 0.2);
@@ -89,6 +92,7 @@
     --cat-orange: #d95926;
     --cat-aqua: #199e70;
     --cat-yellow: #c98500;
+    --cat-magenta: #d55181;
 
     --badge-kafka-bg: rgba(57, 135, 229, 0.16);
     --badge-kafka-fg: #7db4ef;
@@ -98,6 +102,8 @@
     --badge-mq-fg: #ef9269;
     --badge-rabbitmq-bg: rgba(201, 133, 0, 0.2);
     --badge-rabbitmq-fg: #f0b400;
+    --badge-activemq-bg: rgba(213, 81, 129, 0.2);
+    --badge-activemq-fg: #f090b3;
     --badge-good-bg: rgba(12, 163, 12, 0.16);
     --badge-good-fg: #4ed44e;
     --badge-warn-bg: rgba(250, 178, 25, 0.16);
@@ -130,6 +136,7 @@
   --cat-orange: #d95926;
   --cat-aqua: #199e70;
   --cat-yellow: #c98500;
+  --cat-magenta: #d55181;
 
   --badge-kafka-bg: rgba(57, 135, 229, 0.16);
   --badge-kafka-fg: #7db4ef;
@@ -139,6 +146,8 @@
   --badge-mq-fg: #ef9269;
   --badge-rabbitmq-bg: rgba(201, 133, 0, 0.2);
   --badge-rabbitmq-fg: #f0b400;
+  --badge-activemq-bg: rgba(213, 81, 129, 0.2);
+  --badge-activemq-fg: #f090b3;
   --badge-good-bg: rgba(12, 163, 12, 0.16);
   --badge-good-fg: #4ed44e;
   --badge-warn-bg: rgba(250, 178, 25, 0.16);
@@ -463,6 +472,7 @@ table.resource-table {
 .badge-system-solace { background: var(--badge-solace-bg); color: var(--badge-solace-fg); }
 .badge-system-mq { background: var(--badge-mq-bg); color: var(--badge-mq-fg); }
 .badge-system-rabbitmq { background: var(--badge-rabbitmq-bg); color: var(--badge-rabbitmq-fg); }
+.badge-system-activemq { background: var(--badge-activemq-bg); color: var(--badge-activemq-fg); }
 
 .badge-severity-ok { background: var(--badge-good-bg); color: var(--badge-good-fg); }
 .badge-severity-warn { background: var(--badge-warn-bg); color: var(--badge-warn-fg); }

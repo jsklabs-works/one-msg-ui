@@ -162,6 +162,15 @@ def test_find_duplicate_matches_same_rabbitmq_api_url_regardless_of_trailing_sla
     assert dup.id == "r1"
 
 
+def test_find_duplicate_matches_same_activemq_console_url_regardless_of_trailing_slash():
+    registry = BrokerRegistry(
+        [BrokerConfig(id="a1", type="activemq", name="A1", environment="dev", config={"console_url": "http://localhost:8161"})]
+    )
+    dup = registry.find_duplicate("activemq", {"console_url": "http://localhost:8161/"})
+    assert dup is not None
+    assert dup.id == "a1"
+
+
 def test_remove_broker_raises_for_unknown_id():
     registry = BrokerRegistry(_configs())
     try:
@@ -334,4 +343,61 @@ def test_fetch_rabbitmq_normalizes_resources_and_health():
     assert resources[0].namespace == "/"
     assert len(health) == 1
     assert health[0].system_type == "rabbitmq"
+    assert groups == []
+
+
+def test_peek_activemq_uses_override_credentials_not_saved_config():
+    from api.models import Resource
+
+    bc = BrokerConfig(
+        id="b5", type="activemq", name="B5", environment="dev",
+        config={"console_url": "http://x:8161", "username": "saved-user", "password": "saved-pass"},
+    )
+    registry = BrokerRegistry([bc])
+    resource = Resource(id="b5:orders:orders", broker_id="b5", system_type="activemq", namespace="orders", name="orders", kind="queue")
+
+    with patch("activemq_adapter.peek.peek_messages", return_value=[]) as mock_peek:
+        registry.peek(resource, limit=5, override_username="override-user", override_password="override-pass")
+
+    used_session = mock_peek.call_args.kwargs["session"]
+    assert used_session.auth == ("override-user", "override-pass")
+    assert mock_peek.call_args.kwargs["address"] == "orders"
+
+
+def test_peek_activemq_falls_back_to_saved_config_without_override():
+    from api.models import Resource
+
+    bc = BrokerConfig(
+        id="b5", type="activemq", name="B5", environment="dev",
+        config={"console_url": "http://x:8161", "username": "saved-user", "password": "saved-pass"},
+    )
+    registry = BrokerRegistry([bc])
+    resource = Resource(id="b5:orders:orders", broker_id="b5", system_type="activemq", namespace="orders", name="orders", kind="queue")
+
+    with patch("activemq_adapter.peek.peek_messages", return_value=[]) as mock_peek:
+        registry.peek(resource, limit=5)
+
+    used_session = mock_peek.call_args.kwargs["session"]
+    assert used_session.auth == ("saved-user", "saved-pass")
+
+
+def test_fetch_activemq_normalizes_resources_and_health():
+    bc = BrokerConfig(id="b5", type="activemq", name="B5", environment="dev", config={"console_url": "http://x:8161", "username": "u", "password": "p"})
+    registry = BrokerRegistry([bc])
+
+    from activemq_adapter.models import HealthCategory, HealthEvent, HealthSeverity
+    from activemq_adapter.models import Resource as ARes
+
+    fake_resource = ARes(id="b5:orders:orders", broker_id="b5", namespace="orders", name="orders", depth_current=4, depth_max=None)
+    fake_health = HealthEvent(broker_id="b5", severity=HealthSeverity.OK, category=HealthCategory.CONNECTIVITY, message="ok", timestamp="t")
+
+    with patch("activemq_adapter.client.ActiveMQAdapter.get_resources", return_value=[fake_resource]):
+        with patch("activemq_adapter.client.ActiveMQAdapter.get_health_events", return_value=[fake_health]):
+            resources, health, groups = registry._fetch_activemq(bc)
+
+    assert len(resources) == 1
+    assert resources[0].system_type == "activemq"
+    assert resources[0].namespace == "orders"
+    assert len(health) == 1
+    assert health[0].system_type == "activemq"
     assert groups == []

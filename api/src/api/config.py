@@ -113,6 +113,18 @@ FIELD_SPECS: dict[SystemType, list[FieldSpec]] = {
             default="true",
         ),
     ],
+    "activemq": [
+        FieldSpec(name="console_url", label="Web console URL (Jolokia lives under it)", type="text", placeholder="http://localhost:8161"),
+        FieldSpec(name="username", label="Username", type="text", default="admin"),
+        FieldSpec(name="password", label="Password", type="password"),
+        FieldSpec(
+            name="verify_certificate",
+            label="Verify server certificate (uncheck for self-signed dev certs)",
+            type="checkbox",
+            required=False,
+            default="true",
+        ),
+    ],
 }
 
 SYSTEM_TYPE_LABELS: dict[SystemType, str] = {
@@ -120,6 +132,7 @@ SYSTEM_TYPE_LABELS: dict[SystemType, str] = {
     "solace": "Solace PubSub+",
     "mq": "IBM MQ",
     "rabbitmq": "RabbitMQ",
+    "activemq": "ActiveMQ Artemis",
 }
 
 
@@ -153,6 +166,8 @@ def connection_identity(system_type: SystemType, config: dict) -> tuple[str, ...
         )
     if system_type == "rabbitmq":
         return (config.get("api_url", "").strip().lower().rstrip("/"),)
+    if system_type == "activemq":
+        return (config.get("console_url", "").strip().lower().rstrip("/"),)
     return ()
 
 

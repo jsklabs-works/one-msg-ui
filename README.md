@@ -1,6 +1,6 @@
 # one-msg-ui
 
-A single UI to ease day-to-day operations and support across heterogeneous messaging systems — **IBM MQ**, **Apache Kafka**, **Solace PubSub+**, and **RabbitMQ**, with more on the way (ActiveMQ/Artemis is next). Read-only: monitoring (queue depth, consumer lag, health) plus non-destructive message browsing — not an admin console, and deliberately not an alerting tool (see Scope below).
+A single UI to ease day-to-day operations and support across heterogeneous messaging systems — **IBM MQ**, **Apache Kafka**, **Solace PubSub+**, **RabbitMQ**, and **ActiveMQ Artemis**, with more on the way. Read-only: monitoring (queue depth, consumer lag, health) plus non-destructive message browsing — not an admin console, and deliberately not an alerting tool (see Scope below).
 
 Each system is fundamentally different (point-to-point queues vs. distributed log vs. topic/queue hybrid), so rather than faking a one-size-fits-all abstraction, this project normalizes each broker's native metrics into a shared schema and builds the UI against that — see [`docs/architecture.md`](docs/architecture.md) for the full design.
 
@@ -17,8 +17,9 @@ Each system is fundamentally different (point-to-point queues vs. distributed lo
 - **Solace adapter** — Phase 2 complete: VPN/queue monitoring (SEMP v2), connectivity + spool-usage health, and non-destructive message browsing (via the official `solace-pubsubplus` client), verified against a real broker. See [`adapters/solace/README.md`](adapters/solace/README.md) to run it.
 - **IBM MQ adapter** — Phase 3 complete: queue monitoring (MQSC-over-REST), connectivity + capacity health, and non-destructive message peek (REST Messaging API), verified against a real queue manager. No PCF, no native client. See [`adapters/mq/README.md`](adapters/mq/README.md) to run it.
 - **RabbitMQ adapter** — Phase 5 complete: vhost/queue monitoring, node connectivity + capacity health, and non-destructive message peek — all through one API (the management HTTP API), no AMQP client needed at all. Verified against a real broker (Docker). See [`adapters/rabbitmq/README.md`](adapters/rabbitmq/README.md) to run it.
-- **API layer** — MVP working: a FastAPI service fanning out to all four adapters, serving the unified model as JSON, with graceful per-broker degradation. Live passthrough, not yet the poller+store pipeline from architecture.md §4 — see [`api/README.md`](api/README.md).
-- **UI** — MVP working: React + Vite + TypeScript, tabbed (a Dashboard tab plus one real-route tab per connected broker, so multiple brokers can be inspected simultaneously in separate browser tabs), with per-resource drill-down and message peek. Built and verified end-to-end in a real browser against real data from all four systems. See [`ui/README.md`](ui/README.md).
+- **ActiveMQ Artemis adapter** — Phase 5 complete: address/queue monitoring, broker connectivity + capacity health, and non-destructive message peek — all through Jolokia (JMX-over-HTTP, bundled with the broker's own web console), no JMS/core client needed. Verified against a real broker (Docker). See [`adapters/activemq/README.md`](adapters/activemq/README.md) to run it.
+- **API layer** — MVP working: a FastAPI service fanning out to all five adapters, serving the unified model as JSON, with graceful per-broker degradation. Live passthrough, not yet the poller+store pipeline from architecture.md §4 — see [`api/README.md`](api/README.md).
+- **UI** — MVP working: React + Vite + TypeScript, tabbed (a Dashboard tab plus one real-route tab per connected broker, so multiple brokers can be inspected simultaneously in separate browser tabs), with per-resource drill-down and message peek. Built and verified end-to-end in a real browser against real data from all five systems. See [`ui/README.md`](ui/README.md).
 
 ## Layout
 
@@ -29,6 +30,7 @@ adapters/     one module per broker type, each translating that broker's native
   mq/
   solace/
   rabbitmq/
+  activemq/
 api/          unified API layer over the normalized model, consumed by the UI
 ui/           the dashboard itself
 docs/         architecture and design docs
@@ -36,7 +38,7 @@ docs/         architecture and design docs
 
 ## Build order
 
-Per the architecture doc's phased rollout: **Kafka first** (Phase 1), then Solace (Phase 2), then IBM MQ (Phase 3), then RabbitMQ (Phase 5 — Phase 4 was the deferred admin/produce/replay scope, still not built). Kafka is the hardest case to get the abstraction right for (no native "queue depth" concept), so validating the shared schema against it first de-risks the rest. ActiveMQ/Artemis is next.
+Per the architecture doc's phased rollout: **Kafka first** (Phase 1), then Solace (Phase 2), then IBM MQ (Phase 3), then RabbitMQ and ActiveMQ Artemis (Phase 5 — Phase 4 was the deferred admin/produce/replay scope, still not built). Kafka is the hardest case to get the abstraction right for (no native "queue depth" concept), so validating the shared schema against it first de-risks the rest. Azure Service Bus and SQS/SNS are next, once there's an emulator/cloud-namespace verification story to match the Docker-broker pattern every adapter so far has used.
 
 ## Getting started
 
@@ -79,14 +81,24 @@ python3 -m venv .venv && ./.venv/bin/pip install -e ".[dev]"
 ./.venv/bin/python -m rabbitmq_adapter.main queues
 ```
 
-See [`adapters/kafka/README.md`](adapters/kafka/README.md), [`adapters/solace/README.md`](adapters/solace/README.md), [`adapters/mq/README.md`](adapters/mq/README.md), and [`adapters/rabbitmq/README.md`](adapters/rabbitmq/README.md) for the full picture — message peek/browsing, connection flags, and running each test suite.
+**ActiveMQ Artemis** (self-contained — spins up its own local broker):
+
+```bash
+docker compose up -d activemq   # local broker, web console + Jolokia on :8161
+cd adapters/activemq
+python3 -m venv .venv && ./.venv/bin/pip install -e ".[dev]"
+./.venv/bin/python scripts/seed.py                    # optional: sample data
+./.venv/bin/python -m activemq_adapter.main queues
+```
+
+See [`adapters/kafka/README.md`](adapters/kafka/README.md), [`adapters/solace/README.md`](adapters/solace/README.md), [`adapters/mq/README.md`](adapters/mq/README.md), [`adapters/rabbitmq/README.md`](adapters/rabbitmq/README.md), and [`adapters/activemq/README.md`](adapters/activemq/README.md) for the full picture — message peek/browsing, connection flags, and running each test suite.
 
 **Full stack, once the brokers above are up:**
 
 ```bash
 cd api
 python3 -m venv .venv
-./.venv/bin/pip install -e ../adapters/kafka -e ../adapters/solace -e ../adapters/mq -e ../adapters/rabbitmq -e ".[dev]"
+./.venv/bin/pip install -e ../adapters/kafka -e ../adapters/solace -e ../adapters/mq -e ../adapters/rabbitmq -e ../adapters/activemq -e ".[dev]"
 ./.venv/bin/uvicorn api.main:app --port 8010          # in one terminal
 
 cd ui

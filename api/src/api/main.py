@@ -95,7 +95,7 @@ def get_system_types():
     """
     return [
         SystemTypeInfo(type=t, label=SYSTEM_TYPE_LABELS[t], fields=FIELD_SPECS[t])
-        for t in ("kafka", "solace", "mq", "rabbitmq")
+        for t in ("kafka", "solace", "mq", "rabbitmq", "activemq")
     ]
 
 

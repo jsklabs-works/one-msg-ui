@@ -9,6 +9,7 @@ export const NAMESPACE_LABELS: Record<SystemType, string> = {
   solace: "VPN",
   mq: "Queue manager",
   rabbitmq: "Vhost",
+  activemq: "Address",
 };
 
 // What to actually call a resource in the UI — never the internal
@@ -33,9 +34,12 @@ export function kindLabel(kind: string, plural = false): string {
 // NAMESPACE_LABELS reads naturally as a heading ("VPN: default"), but
 // mid-sentence ("2 queues across 3 VPNs") needs the plural, lowercased
 // unless it's an acronym — pluralizing "VPN" to "vpns" would un-acronym
-// it, so only non-all-caps labels get lowercased.
+// it, so only non-all-caps labels get lowercased. A trailing s/x/z/ch/sh
+// needs "es", not another bare "s" — found live: ActiveMQ's "Address"
+// came out "addresss" before this check existed.
 export function namespaceLabelPlural(type: SystemType): string {
   const label = NAMESPACE_LABELS[type];
   const midSentence = label === label.toUpperCase() ? label : label.charAt(0).toLowerCase() + label.slice(1);
-  return `${midSentence}s`;
+  const suffix = /[sxz]$|[cs]h$/.test(midSentence) ? "es" : "s";
+  return `${midSentence}${suffix}`;
 }

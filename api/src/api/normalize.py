@@ -180,3 +180,41 @@ def rabbitmq_message_sample(m) -> models.MessageSample:
         body_preview=m.body_preview,
         size_bytes=m.size_bytes,
     )
+
+
+def activemq_resource(r, broker_id: str) -> models.Resource:
+    return models.Resource(
+        id=r.id,
+        broker_id=broker_id,
+        system_type="activemq",
+        namespace=r.namespace,
+        name=r.name,
+        kind=r.kind,
+        depth_current=r.depth_current,
+        depth_max=r.depth_max,
+        consumer_lag=r.consumer_lag,
+        last_updated=r.last_updated,
+    )
+
+
+def activemq_health_event(h, broker_id: str) -> models.HealthEvent:
+    return models.HealthEvent(
+        broker_id=broker_id,
+        system_type="activemq",
+        severity=h.severity.value if hasattr(h.severity, "value") else h.severity,
+        category=h.category.value if hasattr(h.category, "value") else h.category,
+        message=h.message,
+        timestamp=h.timestamp,
+    )
+
+
+def activemq_message_sample(m) -> models.MessageSample:
+    return models.MessageSample(
+        resource_id=m.resource_id,
+        message_id=m.message_id,
+        timestamp=m.timestamp,
+        topic=m.topic,
+        headers=m.headers,
+        body_preview=m.body_preview,
+        size_bytes=m.size_bytes,
+    )

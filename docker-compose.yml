@@ -72,6 +72,26 @@ services:
       timeout: 5s
       retries: 20
 
+  # Local dev broker for the ActiveMQ Artemis adapter. The web console
+  # (with its bundled Jolokia agent — this adapter's only dependency, see
+  # adapters/activemq/README.md) is enabled by default; ARTEMIS_USER/
+  # ARTEMIS_PASSWORD set the one login it needs.
+  activemq:
+    image: apache/activemq-artemis:latest
+    container_name: one-msg-ui-activemq
+    ports:
+      - "61616:61616" # CORE/AMQP/MQTT/OPENWIRE/STOMP acceptor — not used by this adapter
+                      # (Jolokia covers everything, including peek), published anyway
+      - "8161:8161"   # web console + Jolokia REST API
+    environment:
+      ARTEMIS_USER: admin
+      ARTEMIS_PASSWORD: admin
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf -u admin:admin http://localhost:8161/console/jolokia/version || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
 # No Solace service here (Phase 2): this dev machine already runs a
 # standalone Solace PubSub+ broker (container "pubSubStandardSingleNode",
 # not managed by this docker-compose file) at the default ports —
