@@ -163,3 +163,36 @@ def test_peek_mq_uses_override_credentials_not_saved_config():
     # session.auth was set from the override before being passed in
     used_session = mock_peek.call_args.kwargs["session"]
     assert used_session.auth == ("override-user", "override-pass")
+
+
+def test_peek_kafka_uses_override_sasl_credentials_not_saved_config():
+    from api.models import Resource
+
+    # No sasl_username in the saved config at all — proves the override
+    # doesn't need one already there to take effect (a PLAINTEXT cluster
+    # being retried with SASL credentials for a topic that turns out to
+    # need them, say).
+    bc = BrokerConfig(id="b1", type="kafka", name="B1", environment="dev", config={"bootstrap_servers": "x:9092"})
+    registry = BrokerRegistry([bc])
+    resource = Resource(id="b1:orders", broker_id="b1", system_type="kafka", namespace="x:9092", name="orders", kind="topic")
+
+    with patch("kafka_adapter.peek.peek_messages", return_value=[]) as mock_peek:
+        registry.peek(resource, limit=5, override_username="override-user", override_password="override-pass")
+
+    assert mock_peek.call_args.kwargs["sasl_plain_username"] == "override-user"
+    assert mock_peek.call_args.kwargs["sasl_plain_password"] == "override-pass"
+    assert mock_peek.call_args.kwargs["sasl_mechanism"] == "PLAIN"  # defaulted since the config had none configured
+
+
+def test_peek_kafka_falls_back_to_saved_config_without_override():
+    from api.models import Resource
+
+    bc = BrokerConfig(id="b1", type="kafka", name="B1", environment="dev", config={"bootstrap_servers": "x:9092"})
+    registry = BrokerRegistry([bc])
+    resource = Resource(id="b1:orders", broker_id="b1", system_type="kafka", namespace="x:9092", name="orders", kind="topic")
+
+    with patch("kafka_adapter.peek.peek_messages", return_value=[]) as mock_peek:
+        registry.peek(resource, limit=5)
+
+    assert mock_peek.call_args.kwargs["sasl_plain_username"] is None
+    assert mock_peek.call_args.kwargs["security_protocol"] == "PLAINTEXT"

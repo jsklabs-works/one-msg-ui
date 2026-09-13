@@ -43,6 +43,8 @@ Not covered: mTLS (client certificates), Kerberos, and SASL mechanisms beyond PL
 
 One broker config stores one set of credentials, but that's not always enough for peek specifically: Solace is the concrete case — SEMP admin credentials are broker-wide (that's what makes [multi-VPN discovery](../adapters/solace/README.md) work at all), but an SMF connection for peek authenticates *per VPN*, and a VPN can genuinely need a different username/password than the broker's saved ones. Rather than force every VPN under one connection to share credentials (defeating the point of discovering them dynamically) or fail with no recourse, [`aggregator.peek()`](src/api/aggregator.py) takes optional `override_username`/`override_password` — used for that one call only, never persisted to `config/brokers.json`. The UI prompts for these inline whenever a peek failure looks credentials-related (see [`ui/README.md`](../ui/README.md)).
 
+The override is wired identically for all three adapter types (Solace's SMF login, MQ's app credentials, Kafka's SASL credentials), each with its own test in [`tests/test_aggregator.py`](tests/test_aggregator.py) proving the saved config's credentials are never touched when an override is given. Verified live end-to-end for both Solace (a genuinely unauthorized VPN, `testVPN`) and MQ (deliberately broke `app_password` in the config, confirmed the prompt appeared, retried with the correct password, confirmed it recovered, then restored the config) — a full break → prompt → recover cycle, not just a unit test. Kafka's local dev cluster runs PLAINTEXT with no auth to fail against, so that one is unit-tested only; the wiring is identical to the other two for whenever a real SASL cluster needs it.
+
 ## Layout
 
 ```
