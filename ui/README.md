@@ -21,13 +21,16 @@ All three pages read from one shared poll ([`context/MonitoringDataContext.tsx`]
 ```
 src/
   api.ts                     typed fetch client — mirrors api/src/api/models.py by hand, keep in sync
+  useTheme.ts                light/dark/system preference — persisted to localStorage, applied
+                              as a data-theme attribute; see index.html's inline bootstrap script
   healthUtils.ts             pure helpers (worst-severity-among-events, filter-by-broker)
-  index.css                  design tokens — the dark-mode values from the dataviz skill's
-                              validated reference palette (status colors, the first 3
-                              all-pairs-validated categorical hues for the 3 system types)
+  index.css                  design tokens for all three theme states — the dataviz skill's
+                              validated reference palette (light values as the base, dark
+                              values layered on via prefers-color-scheme + [data-theme])
   context/MonitoringDataContext.tsx  the one shared poll — brokers/resources/health/
                               consumerGroups — every page reads from this, none fetch alone
   components/Layout.tsx      header + tab bar (Dashboard + one tab per broker) + <Outlet/>
+  components/ThemeToggle.tsx  the light/dark/system icon-only segmented control in the header
   components/Badges.tsx      SystemTypeBadge / SeverityBadge / BrokerStatusBadge
   components/StatsSummary.tsx  the stat-tile row (brokers online, resources, health issues,
                               consumer lag) — derived client-side from data already fetched
@@ -40,7 +43,9 @@ src/
 
 ## Visual design
 
-Dark-committed by design (an ops console, not a marketing page) rather than a light/dark toggle — see `index.css`'s header comment. Colors aren't ad-hoc: they're the dark-mode token values from the `dataviz` skill's validated reference palette — status colors (good/warning/critical) for severity and broker-status badges, and the first three categorical hues (the specific trio the palette's validator confirms clears its CVD/contrast checks together) for the three system-type badges. No new hex values were invented, so no re-validation was needed — see the skill's `references/palette.md` if extending this to a 4th system type or a light mode.
+Colors aren't ad-hoc: every token is the `dataviz` skill's validated reference palette — status colors (good/warning/critical) for severity and broker-status badges, and the first three categorical hues (the specific trio the palette's validator confirms clears its CVD/contrast checks together) for the three system-type badges. No new hex values were invented in either mode, so no re-validation was needed — see the skill's `references/palette.md` if extending this to a 4th system type.
+
+**Theme:** light, dark, or system (follows the OS live, including if it changes while the page is open) — the toggle in the header, backed by [`useTheme.ts`](src/useTheme.ts). Light is the CSS base; dark is layered on via `prefers-color-scheme` (for "system") and a `[data-theme="dark"]` attribute (for an explicit choice), both reading from the same token set so nothing is duplicated. The choice persists in `localStorage`, and an inline script in `index.html` applies it before first paint so there's no flash of the wrong theme on reload. Badge background/foreground pairs are tuned per mode (not the same hex reused on both a light and a dark surface) — see `index.css`'s `--badge-*` tokens.
 
 ## Running it locally
 

@@ -4,7 +4,23 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ui</title>
+    <title>one-msg-ui</title>
+    <script>
+      // Applied synchronously, before first paint, so a stored "dark" or
+      // "light" preference never flashes the other theme on load. "system"
+      // (the default) means no attribute at all — the CSS media query
+      // handles it. Keep this in sync with src/useTheme.ts's storage key.
+      (function () {
+        try {
+          var pref = localStorage.getItem("one-msg-ui-theme");
+          if (pref === "light" || pref === "dark") {
+            document.documentElement.setAttribute("data-theme", pref);
+          }
+        } catch (e) {
+          // localStorage unavailable (private mode, etc.) — fall back to system
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

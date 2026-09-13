@@ -9,6 +9,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useMonitoringData } from "../context/MonitoringDataContext";
 import { healthForBroker, worstSeverity } from "../healthUtils";
 import AddBrokerForm from "./AddBrokerForm";
+import ThemeToggle from "./ThemeToggle";
 import type { Broker } from "../api";
 
 function tabDotClass(broker: Broker, health: ReturnType<typeof healthForBroker>) {
@@ -34,6 +35,7 @@ export default function Layout() {
           one-msg-ui
         </h1>
         <div className="header-actions">
+          <ThemeToggle />
           <button onClick={() => setShowAddForm((v) => !v)}>{showAddForm ? "Close" : "+ Add broker"}</button>
           <button onClick={reload} disabled={loading}>
             {loading ? "Refreshing…" : "Refresh"}
