@@ -549,6 +549,10 @@ section h3 { font-size: 0.92rem; font-weight: 600; margin: 18px 0 8px; }
 
 .consumer-group { margin-bottom: 22px; }
 
+.namespace-group { margin-bottom: 22px; }
+.namespace-group:last-child { margin-bottom: 0; }
+.namespace-group h3 { color: var(--ink-secondary); }
+
 .peek-controls { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
 .peek-controls label { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--ink-muted); }
 .peek-controls input { width: 72px; }
@@ -556,6 +560,30 @@ section h3 { font-size: 0.92rem; font-weight: 600; margin: 18px 0 8px; }
 .message-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
 .message-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 15px; }
 .message-meta { color: var(--ink-muted); font-size: 0.75rem; margin-bottom: 7px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.message-topic {
+  display: inline-block;
+  background: var(--badge-kafka-bg);
+  color: var(--badge-kafka-fg);
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-right: 6px;
+  font-weight: 600;
+}
+
+.message-properties {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 10px;
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  background: var(--surface-raised);
+  border-radius: 6px;
+  font-size: 0.78rem;
+}
+.message-property { display: contents; }
+.message-property dt { color: var(--ink-muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.message-property dd { margin: 0; color: var(--ink-secondary); word-break: break-word; }
+
 .message-body {
   margin: 0;
   white-space: pre-wrap;

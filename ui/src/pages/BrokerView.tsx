@@ -2,11 +2,22 @@
 // (removed from the Dashboard tab per request), so drilling into a
 // resource always happens from the broker you're already looking at.
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api } from "../api";
+import { api, type Resource } from "../api";
 import { BrokerStatusBadge, SeverityBadge, SystemTypeBadge } from "../components/Badges";
 import { useMonitoringData } from "../context/MonitoringDataContext";
+import { NAMESPACE_LABELS } from "../labels";
+
+function groupByNamespace(resources: Resource[]): [string, Resource[]][] {
+  const groups = new Map<string, Resource[]>();
+  for (const r of resources) {
+    const group = groups.get(r.namespace);
+    if (group) group.push(r);
+    else groups.set(r.namespace, [r]);
+  }
+  return Array.from(groups.entries());
+}
 
 export default function BrokerView() {
   const { brokerId = "" } = useParams<{ brokerId: string }>();
@@ -19,6 +30,8 @@ export default function BrokerView() {
   const broker = brokers.find((b) => b.id === brokerId);
   const brokerResources = resources.filter((r) => r.broker_id === brokerId);
   const brokerHealth = health.filter((h) => h.broker_id === brokerId);
+  const namespaceGroups = useMemo(() => groupByNamespace(brokerResources), [brokerResources]);
+  const namespaceLabel = broker ? NAMESPACE_LABELS[broker.system_type] : "Namespace";
 
   async function handleRemove() {
     setRemoving(true);
@@ -81,39 +94,41 @@ export default function BrokerView() {
 
       <section>
         <h2>Resources</h2>
-        <div className="table-scroll">
-          <table className="resource-table">
-            <thead>
-              <tr>
-                <th>Namespace</th>
-                <th>Resource</th>
-                <th>Depth</th>
-                <th>Consumer lag</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {brokerResources.map((r) => (
-                <tr key={r.id}>
-                  <td className="mono">{r.namespace}</td>
-                  <td className="mono">{r.name}</td>
-                  <td className="num">{r.depth_current === null ? "—" : `${r.depth_current}${r.depth_max ? ` / ${r.depth_max}` : ""}`}</td>
-                  <td className="num">{r.consumer_lag === null ? "—" : r.consumer_lag}</td>
-                  <td>
-                    <Link to={`/resources/${encodeURIComponent(r.id)}`}>Inspect →</Link>
-                  </td>
-                </tr>
-              ))}
-              {brokerResources.length === 0 && !loading && (
-                <tr>
-                  <td colSpan={5} className="empty-state">
-                    No resources on this broker.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        {brokerResources.length === 0 && !loading ? (
+          <p className="empty-state">No resources on this broker.</p>
+        ) : (
+          namespaceGroups.map(([namespace, groupResources]) => (
+            <div key={namespace} className="namespace-group">
+              <h3>
+                {namespaceLabel}: <span className="mono">{namespace}</span>
+              </h3>
+              <div className="table-scroll">
+                <table className="resource-table">
+                  <thead>
+                    <tr>
+                      <th>Resource</th>
+                      <th>Depth</th>
+                      <th>Consumer lag</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {groupResources.map((r) => (
+                      <tr key={r.id}>
+                        <td className="mono">{r.name}</td>
+                        <td className="num">{r.depth_current === null ? "—" : `${r.depth_current}${r.depth_max ? ` / ${r.depth_max}` : ""}`}</td>
+                        <td className="num">{r.consumer_lag === null ? "—" : r.consumer_lag}</td>
+                        <td>
+                          <Link to={`/resources/${encodeURIComponent(r.id)}`}>Inspect →</Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))
+        )}
       </section>
 
       <section>

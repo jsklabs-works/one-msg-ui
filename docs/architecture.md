@@ -59,7 +59,16 @@ HealthEvent
   broker_id, severity (ok | warn | critical), category (connectivity | capacity | replication | spool), message, timestamp
 
 MessageSample                  # non-destructive peek, not a consume — see §3.1
-  resource_id, message_id (or offset/partition for Kafka), timestamp, headers, body_preview, size_bytes
+  resource_id, message_id (or offset/partition for Kafka), timestamp, topic, headers, body_preview, size_bytes
+  # topic: the actual destination the message arrived on. Kafka: always the
+  # topic being browsed. Solace: can genuinely differ from the queue being
+  # browsed — a message published to a topic and spooled onto the queue via
+  # subscription reports that topic, not the queue name (uses the official
+  # client's get_destination_name(), verified live). MQ: always null, no
+  # topic concept. headers is the message's own properties (Kafka record
+  # headers, Solace get_properties(), MQ's ibm-mq-md-* response headers) —
+  # this was being fetched by the API layer but silently dropped by the UI
+  # until this was added; a support engineer needs these, not just the body.
 ```
 
 Design rationale: rather than inventing a single "queue depth" field that's forced onto Kafka (which has no such number), the model keeps **depth** and **consumer_lag** as separate fields that are simply null/not-applicable for systems where the concept doesn't exist. The UI layer decides what to show per system type instead of the data model lying about equivalence. This avoids the classic mistake of these unification efforts — presenting a fake apples-to-apples number that misleads an on-call engineer at 3am.

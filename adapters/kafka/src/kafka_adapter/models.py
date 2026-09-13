@@ -102,6 +102,7 @@ class MessageSample:
     """Non-destructive peek at a topic's messages — see architecture.md §3.1."""
 
     resource_id: str
+    topic: str
     partition: int
     offset: int
     timestamp: int | None

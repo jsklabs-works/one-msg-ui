@@ -102,6 +102,7 @@ def peek_messages(
                         resource_id=resource_id,
                         message_id=str(message_id) if message_id is not None else None,
                         timestamp=msg.get_time_stamp(),
+                        topic=msg.get_destination_name(),
                         headers=headers,
                         body_preview=body_preview,
                         size_bytes=size_bytes,

@@ -85,6 +85,9 @@ class MessageSample:
     resource_id: str
     message_id: str | None
     timestamp: int | None
+    topic: str | None = None  # the actual destination the message arrived on —
+    # can differ from the queue being browsed when the queue has a topic
+    # subscription (message published to a topic, spooled onto this queue)
     headers: dict[str, str] = field(default_factory=dict)
     body_preview: str = ""
     size_bytes: int = 0

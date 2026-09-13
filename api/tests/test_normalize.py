@@ -18,6 +18,7 @@ from mq_adapter.models import Resource as MQResource
 from solace_adapter.models import HealthCategory as SolaceHealthCategory
 from solace_adapter.models import HealthEvent as SolaceHealthEvent
 from solace_adapter.models import HealthSeverity as SolaceHealthSeverity
+from solace_adapter.models import MessageSample as SolaceMessageSample
 from solace_adapter.models import Resource as SolaceResource
 
 from api import normalize
@@ -51,9 +52,10 @@ def test_kafka_consumer_group_normalizes_partitions():
 
 
 def test_kafka_message_sample_combines_partition_and_offset_into_message_id():
-    m = KafkaMessageSample(resource_id="b1:orders", partition=2, offset=7, timestamp=123, headers={}, body_preview="hi", size_bytes=2)
+    m = KafkaMessageSample(resource_id="b1:orders", topic="orders", partition=2, offset=7, timestamp=123, headers={}, body_preview="hi", size_bytes=2)
     unified = normalize.kafka_message_sample(m)
     assert unified.message_id == "2:7"
+    assert unified.topic == "orders"
 
 
 def test_solace_resource_normalizes_with_system_type_tag():
@@ -69,6 +71,16 @@ def test_solace_health_event_unwraps_enum():
     unified = normalize.solace_health_event(h, "b2")
     assert unified.severity == "critical"
     assert unified.system_type == "solace"
+
+
+def test_solace_message_sample_passes_through_topic():
+    # Solace's topic can genuinely differ from the queue being browsed
+    # (message published to a topic, spooled onto the queue via
+    # subscription) — this is real information, not a formality.
+    m = SolaceMessageSample(resource_id="b2:default:q1", message_id="rmid1:x", timestamp=123, topic="orders/created", headers={}, body_preview="hi", size_bytes=2)
+    unified = normalize.solace_message_sample(m)
+    assert unified.topic == "orders/created"
+    assert unified.message_id == "rmid1:x"
 
 
 def test_mq_resource_normalizes_with_system_type_tag():

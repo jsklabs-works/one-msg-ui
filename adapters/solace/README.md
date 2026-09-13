@@ -9,7 +9,7 @@ Translate Solace's native monitoring surface into the shared model defined in [`
 - `Resource` — one per queue (spooled messages/bytes → `depth_current`; configured spool quota → `depth_max`)
 - Solace is scoped two levels deep (**Message VPN → queue/topic**) — kept explicit as `Resource.namespace` rather than flattened away, per the architecture doc's warning
 - `HealthEvent` — VPN connectivity (`state`/`enabled`) and spool-usage capacity, classified against the VPN's *own* configured `eventMsgSpoolUsageThreshold` rather than a value this adapter invents
-- `MessageSample` — non-destructive peek at a queue's messages (see [`/docs/architecture.md §3.1`](../../docs/architecture.md#31-message-browsingpeek-in-scope-for-v1))
+- `MessageSample` — non-destructive peek at a queue's messages (see [`/docs/architecture.md §3.1`](../../docs/architecture.md#31-message-browsingpeek-in-scope-for-v1)), including `topic`: the message's actual destination via `InboundMessage.get_destination_name()`, which can genuinely differ from the queue being browsed — a message published to a topic and spooled onto this queue via a topic subscription reports that topic, not the queue name
 
 ## Data sources
 

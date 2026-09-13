@@ -88,6 +88,7 @@ def peek_messages(
             samples.append(
                 MessageSample(
                     resource_id=resource_id,
+                    topic=record.topic,
                     partition=record.partition,
                     offset=record.offset,
                     timestamp=record.timestamp,

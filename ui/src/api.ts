@@ -40,6 +40,10 @@ export interface MessageSample {
   resource_id: string;
   message_id: string | null;
   timestamp: string | number | null;
+  // The actual destination the message arrived on. Kafka: always the topic
+  // being browsed. Solace: can differ from the queue being browsed if it
+  // has a topic subscription. MQ: always null — no topic concept.
+  topic: string | null;
   headers: Record<string, string>;
   body_preview: string;
   size_bytes: number;

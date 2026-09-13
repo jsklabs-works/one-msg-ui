@@ -54,6 +54,10 @@ class MessageSample(BaseModel):
     resource_id: str
     message_id: str | None = None
     timestamp: str | int | None = None
+    topic: str | None = None  # the actual destination the message arrived on.
+    # Kafka: always the topic being browsed. Solace: can differ from the
+    # queue being browsed if it has a topic subscription. MQ: always null
+    # — no topic concept, queue-only.
     headers: dict[str, str] = {}
     body_preview: str = ""
     size_bytes: int = 0

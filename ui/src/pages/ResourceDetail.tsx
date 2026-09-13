@@ -10,6 +10,7 @@ import { Link, useParams } from "react-router-dom";
 import { api, type MessageSample } from "../api";
 import { SeverityBadge, SystemTypeBadge } from "../components/Badges";
 import { useMonitoringData } from "../context/MonitoringDataContext";
+import { NAMESPACE_LABELS } from "../labels";
 
 export default function ResourceDetail() {
   const { resourceId = "" } = useParams<{ resourceId: string }>();
@@ -62,7 +63,7 @@ export default function ResourceDetail() {
           <div>{resource.broker_id}</div>
         </div>
         <div>
-          <strong>Namespace</strong>
+          <strong>{NAMESPACE_LABELS[resource.system_type]}</strong>
           <div className="mono">{resource.namespace}</div>
         </div>
         <div>
@@ -171,16 +172,30 @@ export default function ResourceDetail() {
             <p className="empty-state">No messages on this resource right now.</p>
           ) : (
             <ul className="message-list">
-              {messages.map((m, i) => (
-                <li key={i} className="message-card">
-                  <div className="message-meta">
-                    <span className="mono">{m.message_id ?? "no id"}</span>
-                    {m.timestamp !== null && <span> · {m.timestamp}</span>}
-                    <span> · {m.size_bytes} bytes</span>
-                  </div>
-                  <pre className="message-body">{m.body_preview}</pre>
-                </li>
-              ))}
+              {messages.map((m, i) => {
+                const propertyEntries = Object.entries(m.headers);
+                return (
+                  <li key={i} className="message-card">
+                    <div className="message-meta">
+                      {m.topic && <span className="message-topic mono">{m.topic}</span>}
+                      <span className="mono">{m.message_id ?? "no id"}</span>
+                      {m.timestamp !== null && <span> · {m.timestamp}</span>}
+                      <span> · {m.size_bytes} bytes</span>
+                    </div>
+                    {propertyEntries.length > 0 && (
+                      <dl className="message-properties">
+                        {propertyEntries.map(([key, value]) => (
+                          <div key={key} className="message-property">
+                            <dt>{key}</dt>
+                            <dd>{value}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    )}
+                    <pre className="message-body">{m.body_preview}</pre>
+                  </li>
+                );
+              })}
             </ul>
           ))}
       </section>
