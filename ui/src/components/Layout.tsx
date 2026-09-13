@@ -10,6 +10,7 @@ import { useMonitoringData } from "../context/MonitoringDataContext";
 import { healthForBroker, worstSeverity } from "../healthUtils";
 import AddBrokerForm from "./AddBrokerForm";
 import ImportBrokersForm from "./ImportBrokersForm";
+import { LogoGlyph, LogoMark } from "./Logo";
 import ThemeToggle from "./ThemeToggle";
 import { api, type Broker } from "../api";
 
@@ -67,7 +68,9 @@ export default function Layout() {
     <div className="page">
       <header className="page-header">
         <h1>
-          <span className="brand-mark" aria-hidden="true">📡</span>
+          <span className="brand-mark" aria-hidden="true">
+            <LogoGlyph size={18} />
+          </span>
           one-msg-ui
         </h1>
         <div className="header-actions">
@@ -125,7 +128,9 @@ export default function Layout() {
 
       {noBrokersConfigured && !showAddForm && !showImportForm ? (
         <section className="empty-landing">
-          <div className="empty-landing-icon" aria-hidden="true">📡</div>
+          <div className="empty-landing-icon" aria-hidden="true">
+            <LogoMark size={56} />
+          </div>
           <h2>No message brokers configured yet</h2>
           <p className="muted">
             Connect a broker to start monitoring queue depth, consumer lag, and health — or browse messages
