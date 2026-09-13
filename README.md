@@ -42,6 +42,15 @@ Per the architecture doc's phased rollout: **Kafka first** (Phase 1), then Solac
 
 ## Getting started
 
+[`docker-compose.yml`](docker-compose.yml) runs four of the five brokers locally (everything except Solace — see below):
+
+| Service | `docker compose up -d <service>` | Ports | Default credentials |
+|---|---|---|---|
+| Kafka | `kafka` | `9092` (broker) | none (PLAINTEXT) |
+| IBM MQ | `mq` | `1414` (MQI), `9543` (web console + REST) | admin/adminpassw0rd, app/apppassw0rd |
+| RabbitMQ | `rabbitmq` | `5673` (AMQP, unused by the adapter), `15672` (management API + console) | admin/admin |
+| ActiveMQ Artemis | `activemq` | `61616` (CORE/AMQP/MQTT/OPENWIRE/STOMP, unused by the adapter), `8161` (web console + Jolokia) | admin/admin |
+
 **Kafka** (self-contained — spins up its own local broker):
 
 ```bash
