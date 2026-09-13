@@ -60,7 +60,7 @@ export default function Dashboard() {
               <th>System</th>
               <th>Broker</th>
               <th>Namespace</th>
-              <th>Resource</th>
+              <th>Name</th>
               <th>Depth</th>
               <th>Consumer lag</th>
             </tr>
@@ -81,7 +81,7 @@ export default function Dashboard() {
             {filteredResources.length === 0 && !loading && (
               <tr>
                 <td colSpan={6} className="empty-state">
-                  No resources match this filter.
+                  Nothing matches this filter.
                 </td>
               </tr>
             )}

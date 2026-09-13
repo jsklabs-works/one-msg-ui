@@ -10,7 +10,7 @@ import { Link, useParams } from "react-router-dom";
 import { api, type MessageSample, type Resource } from "../api";
 import { SeverityBadge, SystemTypeBadge } from "../components/Badges";
 import { useMonitoringData } from "../context/MonitoringDataContext";
-import { NAMESPACE_LABELS } from "../labels";
+import { NAMESPACE_LABELS, kindLabel } from "../labels";
 
 // Saves the payload shown on screen — note that's the same body_preview
 // the peek endpoint already truncates server-side (a safety cap, not a
@@ -121,7 +121,7 @@ export default function ResourceDetail() {
         </div>
         <div>
           <strong>Kind</strong>
-          <div>{resource.kind}</div>
+          <div>{kindLabel(resource.kind)}</div>
         </div>
         <div>
           <strong>Depth</strong>
@@ -224,8 +224,8 @@ export default function ResourceDetail() {
           <form className="credential-prompt" onSubmit={handleRetryWithCredentials}>
             <p className="muted">
               This looks like a credentials problem, not a connection one — SEMP admin credentials are broker-wide, but
-              {resource.system_type === "solace" ? " this VPN's" : " this resource's"} message connection authenticates
-              separately. Try different credentials just for this peek (nothing is saved):
+              {resource.system_type === "solace" ? " this VPN's" : ` this ${kindLabel(resource.kind).toLowerCase()}'s`} message
+              connection authenticates separately. Try different credentials just for this peek (nothing is saved):
             </p>
             <div className="form-row">
               <label>
@@ -252,7 +252,7 @@ export default function ResourceDetail() {
 
         {messages !== null &&
           (messages.length === 0 ? (
-            <p className="empty-state">No messages on this resource right now.</p>
+            <p className="empty-state">No messages on this {kindLabel(resource.kind).toLowerCase()} right now.</p>
           ) : (
             <ul className="message-list">
               {messages.map((m, i) => {

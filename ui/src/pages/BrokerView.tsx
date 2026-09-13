@@ -7,7 +7,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, type Resource } from "../api";
 import { BrokerStatusBadge, SeverityBadge, SystemTypeBadge } from "../components/Badges";
 import { useMonitoringData } from "../context/MonitoringDataContext";
-import { NAMESPACE_LABELS } from "../labels";
+import { NAMESPACE_LABELS, kindLabel } from "../labels";
 
 function groupByNamespace(resources: Resource[]): [string, Resource[]][] {
   const groups = new Map<string, Resource[]>();
@@ -32,6 +32,12 @@ export default function BrokerView() {
   const brokerHealth = health.filter((h) => h.broker_id === brokerId);
   const namespaceGroups = useMemo(() => groupByNamespace(brokerResources), [brokerResources]);
   const namespaceLabel = broker ? NAMESPACE_LABELS[broker.system_type] : "Namespace";
+  // Every resource on one broker shares one kind (a Kafka broker's are
+  // all topics, an MQ/Solace one's all queues) — see labels.ts for why
+  // this reads off the actual data instead of the system type.
+  const resourceKind = brokerResources[0]?.kind;
+  const kindSingular = resourceKind ? kindLabel(resourceKind) : "Resource";
+  const kindPlural = resourceKind ? kindLabel(resourceKind, true) : "Resources";
 
   async function handleRemove() {
     setRemoving(true);
@@ -93,9 +99,9 @@ export default function BrokerView() {
       </section>
 
       <section>
-        <h2>Resources</h2>
+        <h2>{kindPlural}</h2>
         {brokerResources.length === 0 && !loading ? (
-          <p className="empty-state">No resources on this broker.</p>
+          <p className="empty-state">No {kindPlural.toLowerCase()} on this broker.</p>
         ) : (
           namespaceGroups.map(([namespace, groupResources]) => (
             <div key={namespace} className="namespace-group">
@@ -106,7 +112,7 @@ export default function BrokerView() {
                 <table className="resource-table">
                   <thead>
                     <tr>
-                      <th>Resource</th>
+                      <th>{kindSingular}</th>
                       <th>Depth</th>
                       <th>Consumer lag</th>
                       <th></th>
