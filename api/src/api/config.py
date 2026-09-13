@@ -95,9 +95,32 @@ FIELD_SPECS: dict[SystemType, list[FieldSpec]] = {
             default="false",
         ),
     ],
+    "rabbitmq": [
+        FieldSpec(name="api_url", label="Management API URL", type="text", placeholder="http://localhost:15672"),
+        FieldSpec(
+            name="vhost",
+            label="Virtual host (leave blank to monitor every vhost these credentials can see)",
+            type="text",
+            required=False,
+        ),
+        FieldSpec(name="username", label="Username", type="text", default="admin"),
+        FieldSpec(name="password", label="Password", type="password"),
+        FieldSpec(
+            name="verify_certificate",
+            label="Verify server certificate (uncheck for self-signed dev certs)",
+            type="checkbox",
+            required=False,
+            default="true",
+        ),
+    ],
 }
 
-SYSTEM_TYPE_LABELS: dict[SystemType, str] = {"kafka": "Apache Kafka", "solace": "Solace PubSub+", "mq": "IBM MQ"}
+SYSTEM_TYPE_LABELS: dict[SystemType, str] = {
+    "kafka": "Apache Kafka",
+    "solace": "Solace PubSub+",
+    "mq": "IBM MQ",
+    "rabbitmq": "RabbitMQ",
+}
 
 
 def validate_broker_config_fields(system_type: SystemType, config: dict) -> list[str]:
@@ -128,6 +151,8 @@ def connection_identity(system_type: SystemType, config: dict) -> tuple[str, ...
             config.get("admin_url", "").strip().lower().rstrip("/"),
             config.get("qmgr_name", "").strip(),
         )
+    if system_type == "rabbitmq":
+        return (config.get("api_url", "").strip().lower().rstrip("/"),)
     return ()
 
 

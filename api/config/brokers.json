@@ -35,6 +35,17 @@
         "app_password": "apppassw0rd",
         "queue_pattern": "DEV.*"
       }
+    },
+    {
+      "id": "local-rabbitmq",
+      "type": "rabbitmq",
+      "name": "Local RabbitMQ",
+      "environment": "dev",
+      "config": {
+        "api_url": "http://localhost:15672",
+        "username": "admin",
+        "password": "admin"
+      }
     }
   ]
 }

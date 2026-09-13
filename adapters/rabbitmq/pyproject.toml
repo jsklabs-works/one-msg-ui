@@ -1,0 +1,18 @@
+[project]
+name = "rabbitmq-adapter"
+version = "0.1.0"
+description = "RabbitMQ adapter for one-msg-ui — normalizes the management HTTP API's monitoring + non-destructive message browsing into the shared schema (see /docs/architecture.md)"
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

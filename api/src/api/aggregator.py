@@ -135,6 +135,27 @@ class BrokerRegistry:
         finally:
             adapter.close()
 
+    def _fetch_rabbitmq(self, bc: BrokerConfig):
+        from rabbitmq_adapter.client import RabbitMQAdapter
+
+        adapter = RabbitMQAdapter(
+            broker_id=bc.id,
+            base_url=bc.config["api_url"],
+            # Optional filter, not a required scope — unset means "every
+            # vhost these credentials can see" (same pattern as Solace's
+            # vpn_name, adopted from the start here rather than fixed later).
+            vhost=bc.config.get("vhost") or None,
+            username=bc.config["username"],
+            password=bc.config["password"],
+            verify_certificate=config_bool(bc.config, "verify_certificate", True),
+        )
+        try:
+            resources = [normalize.rabbitmq_resource(r, bc.id) for r in adapter.get_resources()]
+            health = [normalize.rabbitmq_health_event(h, bc.id) for h in adapter.get_health_events()]
+            return resources, health, []
+        finally:
+            adapter.close()
+
     def _fetch_mq(self, bc: BrokerConfig):
         from mq_adapter.client import MQAdapter
 
@@ -157,7 +178,7 @@ class BrokerRegistry:
     # Method *names*, looked up via getattr at call time — not the bound
     # methods themselves, so that patching a method on the class (as the
     # tests do) actually takes effect.
-    _FETCHER_NAMES = {"kafka": "_fetch_kafka", "solace": "_fetch_solace", "mq": "_fetch_mq"}
+    _FETCHER_NAMES = {"kafka": "_fetch_kafka", "solace": "_fetch_solace", "mq": "_fetch_mq", "rabbitmq": "_fetch_rabbitmq"}
 
     def fetch_all(self) -> tuple[list[models.Broker], list[models.Resource], list[models.HealthEvent], list[models.ConsumerGroup]]:
         brokers: list[models.Broker] = []
@@ -266,5 +287,30 @@ class BrokerRegistry:
             finally:
                 session.close()
             return [normalize.mq_message_sample(m) for m in samples]
+
+        if bc.type == "rabbitmq":
+            import requests
+
+            from rabbitmq_adapter.peek import peek_messages
+
+            session = requests.Session()
+            session.auth = (override_username or bc.config["username"], override_password if override_username else bc.config["password"])
+            session.verify = config_bool(bc.config, "verify_certificate", True)
+            try:
+                samples = peek_messages(
+                    session=session,
+                    base_url=bc.config["api_url"],
+                    # The resource's own vhost, not the broker config's
+                    # (possibly unset, "all vhosts") filter — same reasoning
+                    # as Solace's peek using resource.namespace rather than
+                    # the broker-level vpn_name filter.
+                    vhost=resource.namespace,
+                    queue_name=resource.name,
+                    resource_id=resource.id,
+                    limit=limit,
+                )
+            finally:
+                session.close()
+            return [normalize.rabbitmq_message_sample(m) for m in samples]
 
         raise ValueError(f"unknown broker type: {bc.type}")

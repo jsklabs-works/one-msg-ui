@@ -8,6 +8,7 @@ export const NAMESPACE_LABELS: Record<SystemType, string> = {
   kafka: "Cluster",
   solace: "VPN",
   mq: "Queue manager",
+  rabbitmq: "Vhost",
 };
 
 // What to actually call a resource in the UI — never the internal

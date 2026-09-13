@@ -50,6 +50,28 @@ services:
       timeout: 5s
       retries: 60
 
+  # Local dev broker for the RabbitMQ adapter. The "-management" image
+  # ships the rabbitmq_management plugin enabled by default — that plugin's
+  # HTTP API is the adapter's only dependency, see adapters/rabbitmq/README.md.
+  # Explicit admin/admin credentials rather than relying on the default
+  # guest/guest, which RabbitMQ restricts to loopback-only connections.
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: one-msg-ui-rabbitmq
+    ports:
+      - "5673:5672"   # AMQP — not used by this adapter (management API covers everything,
+                      # including peek), published anyway in case something else needs it;
+                      # 5672 stays free for the standalone Solace broker below.
+      - "15672:15672" # management HTTP API + web console
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
 # No Solace service here (Phase 2): this dev machine already runs a
 # standalone Solace PubSub+ broker (container "pubSubStandardSingleNode",
 # not managed by this docker-compose file) at the default ports —

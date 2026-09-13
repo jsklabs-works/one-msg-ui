@@ -97,5 +97,17 @@ def test_connection_identity_mq_requires_both_admin_url_and_qmgr_name_to_match()
     assert same_qmgr != diff_qmgr
 
 
+def test_connection_identity_rabbitmq_ignores_trailing_slash_case_vhost_and_credentials():
+    a = connection_identity("rabbitmq", {"api_url": "HTTP://Localhost:15672/", "vhost": "a", "username": "u1"})
+    b = connection_identity("rabbitmq", {"api_url": "http://localhost:15672", "vhost": "b", "username": "u2"})
+    assert a == b
+
+
+def test_connection_identity_rabbitmq_distinguishes_different_api_url():
+    a = connection_identity("rabbitmq", {"api_url": "http://host1:15672"})
+    b = connection_identity("rabbitmq", {"api_url": "http://host2:15672"})
+    assert a != b
+
+
 def test_connection_identity_unknown_type_returns_empty_tuple():
     assert connection_identity("bogus", {"anything": "x"}) == ()

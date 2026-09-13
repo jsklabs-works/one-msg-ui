@@ -1,7 +1,7 @@
 // Mirrors api/src/api/models.py — the unified shapes the API layer serves.
 // Keep these in sync by hand for now; see /docs/architecture.md §3.
 
-export type SystemType = "kafka" | "solace" | "mq";
+export type SystemType = "kafka" | "solace" | "mq" | "rabbitmq";
 export type BrokerStatus = "up" | "down" | "degraded";
 export type HealthSeverity = "ok" | "warn" | "critical";
 export type HealthCategory = "connectivity" | "capacity" | "replication" | "spool";
