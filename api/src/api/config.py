@@ -109,6 +109,28 @@ def validate_broker_config_fields(system_type: SystemType, config: dict) -> list
     return errors
 
 
+def connection_identity(system_type: SystemType, config: dict) -> tuple[str, ...]:
+    """A normalized key identifying which physical broker/endpoint a
+    connection actually points at — used to reject a second broker aimed
+    at the same place under a different display name (see
+    aggregator.BrokerRegistry.find_duplicate). Deliberately narrower than
+    "identical config": different credentials or a different Solace VPN
+    filter can still be a legitimate second connection; the same admin
+    endpoint for the same thing is always a duplicate no matter what it's
+    named.
+    """
+    if system_type == "kafka":
+        return (config.get("bootstrap_servers", "").strip().lower(),)
+    if system_type == "solace":
+        return (config.get("semp_url", "").strip().lower().rstrip("/"),)
+    if system_type == "mq":
+        return (
+            config.get("admin_url", "").strip().lower().rstrip("/"),
+            config.get("qmgr_name", "").strip(),
+        )
+    return ()
+
+
 def config_bool(config: dict, key: str, default: bool) -> bool:
     """Broker `config` values come from JSON (already real bools if the
     UI sent them that way) or from CLI/manual edits (often "true"/"false"

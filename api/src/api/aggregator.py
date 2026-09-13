@@ -18,7 +18,7 @@ import datetime as _dt
 import logging
 
 from . import models, normalize
-from .config import BrokerConfig, config_bool
+from .config import BrokerConfig, config_bool, connection_identity
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +56,22 @@ class BrokerRegistry:
 
     def get_config(self, broker_id: str) -> BrokerConfig | None:
         return self._by_id.get(broker_id)
+
+    def find_duplicate(self, system_type: str, config: dict) -> BrokerConfig | None:
+        """An existing broker already pointing at the same physical
+        endpoint (see config.connection_identity) — checked before adding
+        a new one so two different display names can't both connect to
+        the same broker. A config with no identifying fields set at all
+        (e.g. still mid-validation-error) never matches anything, rather
+        than every such config colliding with every other.
+        """
+        identity = connection_identity(system_type, config)
+        if not any(identity):
+            return None
+        for bc in self.broker_configs:
+            if bc.type == system_type and connection_identity(bc.type, bc.config) == identity:
+                return bc
+        return None
 
     def add_broker(self, bc: BrokerConfig) -> None:
         if bc.id in self._by_id:

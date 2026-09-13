@@ -1,6 +1,13 @@
 import json
 
-from api.config import BrokerConfig, load_broker_configs, save_broker_configs, slugify, validate_broker_config_fields
+from api.config import (
+    BrokerConfig,
+    connection_identity,
+    load_broker_configs,
+    save_broker_configs,
+    slugify,
+    validate_broker_config_fields,
+)
 
 
 def test_validate_broker_config_fields_flags_missing_required_field():
@@ -53,3 +60,42 @@ def test_save_broker_configs_writes_readable_json(tmp_path):
     save_broker_configs([BrokerConfig(id="b1", type="kafka", name="B1", environment="dev", config={})], path)
     data = json.loads(path.read_text())
     assert data["brokers"][0]["id"] == "b1"
+
+
+def test_connection_identity_kafka_normalizes_case_and_whitespace():
+    a = connection_identity("kafka", {"bootstrap_servers": "  Localhost:9092  "})
+    b = connection_identity("kafka", {"bootstrap_servers": "localhost:9092"})
+    assert a == b
+
+
+def test_connection_identity_kafka_distinguishes_different_bootstrap_servers():
+    a = connection_identity("kafka", {"bootstrap_servers": "host1:9092"})
+    b = connection_identity("kafka", {"bootstrap_servers": "host2:9092"})
+    assert a != b
+
+
+def test_connection_identity_solace_ignores_trailing_slash_and_case():
+    a = connection_identity("solace", {"semp_url": "HTTP://Localhost:8080/"})
+    b = connection_identity("solace", {"semp_url": "http://localhost:8080"})
+    assert a == b
+
+
+def test_connection_identity_solace_ignores_vpn_and_credentials():
+    # Deliberate: a different vpn_name/username/password is a legitimate
+    # second connection to the same SEMP endpoint, not a duplicate — see
+    # connection_identity's docstring.
+    a = connection_identity("solace", {"semp_url": "http://localhost:8080", "vpn_name": "vpn-a", "username": "u1"})
+    b = connection_identity("solace", {"semp_url": "http://localhost:8080", "vpn_name": "vpn-b", "username": "u2"})
+    assert a == b
+
+
+def test_connection_identity_mq_requires_both_admin_url_and_qmgr_name_to_match():
+    same_qmgr = connection_identity("mq", {"admin_url": "https://localhost:9543", "qmgr_name": "QM1"})
+    same_qmgr_2 = connection_identity("mq", {"admin_url": "https://localhost:9543/", "qmgr_name": "QM1"})
+    diff_qmgr = connection_identity("mq", {"admin_url": "https://localhost:9543", "qmgr_name": "QM2"})
+    assert same_qmgr == same_qmgr_2
+    assert same_qmgr != diff_qmgr
+
+
+def test_connection_identity_unknown_type_returns_empty_tuple():
+    assert connection_identity("bogus", {"anything": "x"}) == ()

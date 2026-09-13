@@ -80,6 +80,79 @@ def test_remove_broker_drops_it_from_both_the_list_and_lookup():
     assert all(b.id != "b1" for b in registry.broker_configs)
 
 
+def test_find_duplicate_matches_same_kafka_bootstrap_servers_case_and_space_insensitively():
+    registry = BrokerRegistry(_configs())  # b1 is kafka, bootstrap_servers="x"
+    dup = registry.find_duplicate("kafka", {"bootstrap_servers": " X "})
+    assert dup is not None
+    assert dup.id == "b1"
+
+
+def test_find_duplicate_ignores_different_kafka_bootstrap_servers():
+    registry = BrokerRegistry(_configs())
+    assert registry.find_duplicate("kafka", {"bootstrap_servers": "other:9092"}) is None
+
+
+def test_find_duplicate_matches_same_solace_semp_url_regardless_of_trailing_slash():
+    registry = BrokerRegistry(
+        [BrokerConfig(id="s1", type="solace", name="S1", environment="dev", config={"semp_url": "http://localhost:8080"})]
+    )
+    dup = registry.find_duplicate("solace", {"semp_url": "http://localhost:8080/"})
+    assert dup is not None
+    assert dup.id == "s1"
+
+
+def test_find_duplicate_ignores_different_solace_semp_url():
+    registry = BrokerRegistry(
+        [BrokerConfig(id="s1", type="solace", name="S1", environment="dev", config={"semp_url": "http://localhost:8080"})]
+    )
+    assert registry.find_duplicate("solace", {"semp_url": "http://otherhost:8080"}) is None
+
+
+def test_find_duplicate_matches_same_mq_admin_url_and_qmgr_name():
+    registry = BrokerRegistry(
+        [
+            BrokerConfig(
+                id="m1",
+                type="mq",
+                name="M1",
+                environment="dev",
+                config={"admin_url": "https://localhost:9543", "qmgr_name": "QM1"},
+            )
+        ]
+    )
+    dup = registry.find_duplicate("mq", {"admin_url": "https://localhost:9543/", "qmgr_name": "QM1"})
+    assert dup is not None
+    assert dup.id == "m1"
+
+
+def test_find_duplicate_ignores_same_mq_admin_url_with_a_different_qmgr_name():
+    # Same box, second queue manager on it — a legitimate separate broker.
+    registry = BrokerRegistry(
+        [
+            BrokerConfig(
+                id="m1",
+                type="mq",
+                name="M1",
+                environment="dev",
+                config={"admin_url": "https://localhost:9543", "qmgr_name": "QM1"},
+            )
+        ]
+    )
+    assert registry.find_duplicate("mq", {"admin_url": "https://localhost:9543", "qmgr_name": "QM2"}) is None
+
+
+def test_find_duplicate_ignores_different_broker_type_even_with_overlapping_fields():
+    registry = BrokerRegistry(_configs())  # b1 is kafka
+    # A solace config with no semp_url set shouldn't accidentally collide with
+    # b1's kafka bootstrap_servers just because both types are being probed.
+    assert registry.find_duplicate("solace", {"bootstrap_servers": "x"}) is None
+
+
+def test_find_duplicate_returns_none_for_a_config_with_no_identifying_fields_set():
+    registry = BrokerRegistry(_configs())  # b2 is solace with config={}
+    assert registry.find_duplicate("solace", {}) is None
+
+
 def test_remove_broker_raises_for_unknown_id():
     registry = BrokerRegistry(_configs())
     try:

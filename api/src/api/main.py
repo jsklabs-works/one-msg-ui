@@ -85,6 +85,13 @@ def create_broker(req: CreateBrokerRequest):
     if _registry.get_config(broker_id) is not None:
         raise HTTPException(status_code=409, detail=f"a broker named {req.name!r} already exists")
 
+    duplicate = _registry.find_duplicate(req.type, req.config)
+    if duplicate is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"{SYSTEM_TYPE_LABELS[req.type]} broker {duplicate.name!r} already points at this same connection",
+        )
+
     bc = BrokerConfig(id=broker_id, type=req.type, name=req.name, environment=req.environment, config=req.config)
 
     # Fail loudly now rather than silently later — see test_connection's

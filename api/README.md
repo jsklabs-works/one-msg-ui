@@ -20,7 +20,7 @@ Serves the normalized model (see [`/docs/architecture.md`](../docs/architecture.
 | `GET /api/resources/{resource_id}/messages?limit=N` | Non-destructive peek — architecture.md §3.1. Kafka/Solace can return up to `limit`; MQ can only ever return the one oldest message (see [`adapters/mq/README.md`](../adapters/mq/README.md)) |
 | `POST /api/resources/{resource_id}/messages` `{limit, username, password}` | Same peek, but with credentials for just this call instead of the broker's saved config — a password has no business in a URL query string, hence POST. For when the broker's saved credentials don't work for this specific resource (see next section) |
 | `GET /api/system-types` | The broker types this instance can connect to (today: Kafka, Solace, MQ) plus each one's real connection `fields` — drives the UI's "add broker" form dynamically, see [`config.py`](src/api/config.py)'s `FIELD_SPECS` |
-| `POST /api/brokers` | Add a broker: `{type, name, environment, config}`. Actually tries to connect before saving anything (422 with the real error if it fails) — see [`aggregator.py`](src/api/aggregator.py)'s `test_connection()` |
+| `POST /api/brokers` | Add a broker: `{type, name, environment, config}`. Rejects a duplicate display name or a second connection to the same physical broker with 409 (see below), then actually tries to connect before saving anything (422 with the real error if it fails) — see [`aggregator.py`](src/api/aggregator.py)'s `test_connection()` |
 | `DELETE /api/brokers/{broker_id}` | Forget a broker (just the connection entry — never touches the broker itself) |
 
 A broker that's unreachable is reported with `status: "down"` and a `critical`/`connectivity` `HealthEvent` rather than failing the whole request — see [`aggregator.py`](src/api/aggregator.py)'s `fetch_all()`. Two-out-of-three brokers responding is more useful to an on-call engineer than a blank screen.
@@ -38,6 +38,15 @@ Each `FIELD_SPECS` entry includes the real security options each adapter now act
 - **MQ** — `verify_tls` (default off, matching the dev queue manager's self-signed cert). `MQAdapter` already accepted this; it just wasn't exposed or configurable from here before.
 
 Not covered: mTLS (client certificates), Kerberos, and SASL mechanisms beyond PLAIN. Add `FIELD_SPECS` entries and the matching adapter support if a real broker needs those.
+
+### Duplicate-connection detection
+
+Adding a broker checks two different things, both before anything is persisted or connected to:
+
+1. **Duplicate display name** — a second broker named the same as an existing one (409, `"a broker named '...' already exists"`).
+2. **Duplicate connection** — a second broker pointed at the *same physical endpoint* as an existing one, whatever it's named — e.g. two Solace entries with the same SEMP URL, two Kafka entries with the same `bootstrap_servers`, or two MQ entries with the same admin URL *and* queue manager name (409, `"... broker '...' already points at this same connection"`).
+
+The identity check ([`config.connection_identity`](src/api/config.py), used by [`aggregator.BrokerRegistry.find_duplicate`](src/api/aggregator.py)) is deliberately narrower than "identical config": different credentials or a different Solace VPN filter on the same SEMP URL is still a legitimate second connection (that's the whole point of the per-resource peek credentials below), and two MQ queue managers on the same host are two different brokers. Only the fields that actually identify *which broker* a connection reaches are compared, normalized for case/whitespace/trailing slash so `http://localhost:8080` and `HTTP://Localhost:8080/` are correctly seen as the same broker.
 
 ### Per-resource peek credentials
 
