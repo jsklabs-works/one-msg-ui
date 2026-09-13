@@ -5,12 +5,15 @@ Run with: uvicorn api.main:app --reload --port 8000
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from . import models
 from .aggregator import BrokerRegistry
@@ -279,3 +282,38 @@ def post_resource_messages(resource_id: str, body: PeekWithCredentials):
         return _registry.peek(resource, limit=body.limit, override_username=body.username, override_password=body.password)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+# -- serving the built UI (single-container distribution) -------------------
+#
+# Dev mode (Vite on :5173, CORS above) doesn't need any of this — it's only
+# for the packaged distribution, where `ui/dist` (from `npm run build`) gets
+# served by this same process instead of a separate frontend server. This
+# must be the LAST route registered — {full_path:path} matches everything,
+# so every concrete /api/... route above needs to already exist for FastAPI
+# to prefer it.
+#
+# The fallback default below only resolves correctly for an *editable* dev
+# install (`pip install -e .`, where __file__ still points at this source
+# tree) — for a real (non-editable) distribution install, __file__ resolves
+# into site-packages instead, and parents[3] lands nowhere near ui/dist.
+# Confirmed live: a fresh non-editable install with no ONE_MSG_UI_STATIC_DIR
+# served a plain 404 at "/" rather than the UI. Both the Dockerfile and
+# README's plain-build instructions always set this env var explicitly for
+# exactly that reason — treat the default as a source-checkout convenience,
+# not something a real distribution install can rely on.
+_STATIC_DIR = Path(os.environ.get("ONE_MSG_UI_STATIC_DIR", Path(__file__).resolve().parents[3] / "ui" / "dist"))
+
+if _STATIC_DIR.is_dir():
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def serve_ui(full_path: str):
+        # A real asset (JS/CSS/favicon/etc.) is served as itself; anything
+        # else — including a client-side route like /brokers/local-kafka —
+        # falls back to index.html so react-router can take over, the
+        # standard SPA-hosting pattern (a full page load/refresh on a deep
+        # link would otherwise 404 before React ever runs).
+        candidate = (_STATIC_DIR / full_path).resolve()
+        if full_path and candidate.is_file() and _STATIC_DIR.resolve() in candidate.parents:
+            return FileResponse(candidate)
+        return FileResponse(_STATIC_DIR / "index.html")

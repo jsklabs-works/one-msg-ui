@@ -134,7 +134,7 @@ export default function Layout() {
           <h2>No message brokers configured yet</h2>
           <p className="muted">
             Connect a broker to start monitoring queue depth, consumer lag, and health — or browse messages
-            non-destructively. Supported today: Apache Kafka, Solace PubSub+, and IBM MQ.
+            non-destructively. Supported today: Apache Kafka, Solace PubSub+, IBM MQ, RabbitMQ, and ActiveMQ Artemis.
           </p>
           <div className="empty-landing-actions">
             <button onClick={() => setShowAddForm(true)}>+ Add your first broker</button>

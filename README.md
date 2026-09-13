@@ -116,3 +116,45 @@ npm run dev                                            # in another; opens on :5
 ```
 
 See [`api/README.md`](api/README.md) and [`ui/README.md`](ui/README.md) for endpoint details, broker configuration, and what's verified vs. not.
+
+## Packaging for distribution
+
+Everything above is the *dev* setup — the UI on its own Vite dev server, hitting the API over CORS. For handing this to someone else to actually run, the API can serve the UI's own built static files from the same process (see `main.py`'s `ONE_MSG_UI_STATIC_DIR` block) — one process, one port, no separate frontend server. Two ways to get there, both verified live:
+
+### Docker (no Python/Node toolchain needed on the machine that runs it)
+
+```bash
+docker build -t one-msg-ui .
+docker run -d -p 8010:8010 -v $(pwd)/data:/data one-msg-ui
+```
+
+[`Dockerfile`](Dockerfile) is a two-stage build: `npm run build` compiles the UI (with `VITE_API_BASE_URL=""`, so its requests go to the same origin serving it, not a hardcoded `localhost:8010`), then a Python stage installs the API and all five adapter packages from source and copies the built UI in — everything the "Full stack" section above installs by hand, done once at image-build time. The image never bakes in `config/brokers.json`'s real connection details; mounting `-v $(pwd)/data:/data` persists whatever brokers you add through the UI itself across restarts (an unmounted `/data` just means "start with zero brokers configured, same as a fresh checkout" — writes still succeed, they just don't survive removing the container). Point it at brokers running on your own machine using `host.docker.internal` instead of `localhost` in each broker's connection field (Docker's own DNS name for reaching the host from inside a container — this is what actually differs from the dev setup above, not anything this project does).
+
+Verified live: built the image, ran it standalone (empty-state landing page, all five system types listed), added a real RabbitMQ and a real ActiveMQ broker running on the host via `host.docker.internal`, confirmed resources/health loaded through the containerized app, and confirmed a broker added with `/data` mounted was still there after `docker restart`.
+
+### Plain build (already have Python 3.10+ and Node on the target machine)
+
+```bash
+# UI — produces ui/dist, servable as static files by anything, including the API itself
+cd ui && VITE_API_BASE_URL="" npm run build
+
+# API + adapters — same installs as the Dockerfile, just not inside a container
+cd ../api
+python3 -m venv .venv
+./.venv/bin/pip install ../adapters/kafka ../adapters/solace ../adapters/mq ../adapters/rabbitmq ../adapters/activemq .
+
+# Serve both from one process. ONE_MSG_UI_STATIC_DIR is REQUIRED here — its
+# fallback default only resolves correctly for an *editable* dev install
+# (`pip install -e .`), where the installed package's __file__ still points
+# at this source tree. The plain install above is not editable (deliberately
+# — same as the Dockerfile's), so that fallback silently can't find ui/dist:
+# confirmed live, a fresh non-editable install without this env var served a
+# plain 404 at "/" instead of the UI.
+ONE_MSG_UI_STATIC_DIR=$(pwd)/../ui/dist \
+ONE_MSG_UI_BROKERS_CONFIG=/path/to/your/brokers.json \
+  ./.venv/bin/uvicorn api.main:app --host 0.0.0.0 --port 8010
+```
+
+To hand off *just* the Python side without copying source (e.g. installing on a server that never sees this git checkout), build real wheels instead of installing from local paths: `python -m build` inside each `adapters/*` directory and inside `api/` (each already has the `[build-system]` a wheel needs) produces a `.whl` under that package's own `dist/` — copy those five wheels plus `ui/dist` to the target machine, `pip install *.whl` there, and still set `ONE_MSG_UI_STATIC_DIR` to wherever `ui/dist` ended up (same reason as above — it's not derivable from the installed wheel's own location).
+
+Same distinction as the Docker path: point brokers.json's connection fields at wherever your real brokers actually are — `localhost` only works if the broker and this process are on the same machine.
