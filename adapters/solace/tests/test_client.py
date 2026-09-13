@@ -101,3 +101,21 @@ def test_get_health_events_covers_every_discovered_vpn():
     connectivity_events = [e for e in events if e.category == "connectivity"]
     assert len(connectivity_events) == 2
     assert {"default" in e.message or "testVPN" in e.message for e in connectivity_events} == {True}
+
+
+def test_get_health_events_spool_usage_converts_bytes_to_mb():
+    # Regression test for a real bug found live: msgSpoolUsage is in BYTES
+    # (confirmed empirically — it equals the exact sum of the VPN's
+    # queues' spooledByteCount) while maxMsgSpoolUsage is in MB, despite
+    # sitting right next to it in the same API response. Comparing them
+    # directly produced a "506%" spool-usage reading on a VPN the broker's
+    # own admin console showed as 0.0005 MB used out of a 100 MB quota.
+    adapter = SolaceAdapter(broker_id="b1", base_url="http://example", username="u", password="p", vpn_name="testVPN")
+    vpn_body = {"data": {"state": "up", "enabled": True, "msgSpoolUsage": 506, "maxMsgSpoolUsage": 100}}
+    with patch.object(adapter, "_get", return_value=vpn_body):
+        events = adapter.get_health_events()
+
+    spool_event = next(e for e in events if e.category == "spool")
+    assert spool_event.severity == "ok"  # 506 bytes / 100 MB is nowhere near the 80% warn threshold
+    assert "506.0%" not in spool_event.message
+    assert "0.0005" in spool_event.message

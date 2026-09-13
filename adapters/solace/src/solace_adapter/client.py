@@ -136,20 +136,28 @@ class SolaceAdapter:
                 )
             )
 
-            max_spool = vpn.get("maxMsgSpoolUsage") or 0
-            used_spool = vpn.get("msgSpoolUsage") or 0
+            # `maxMsgSpoolUsage` is in MB (matches the admin console's
+            # "Configured Quota"); `msgSpoolUsage` is in *bytes* despite
+            # sitting right next to it — confirmed empirically (it equals
+            # the exact sum of the VPN's queues' spooledByteCount) after
+            # this comparison originally treated both as the same unit and
+            # produced a "506%" spool-usage reading on a VPN the broker's
+            # own console showed as 0.0005 MB used out of a 100 MB quota.
+            # 1 MB = 1,048,576 bytes, Solace's own convention for spool sizing.
+            max_spool_mb = vpn.get("maxMsgSpoolUsage") or 0
+            used_spool_mb = (vpn.get("msgSpoolUsage") or 0) / 1_048_576
             # Use the VPN's own configured event threshold rather than a
             # hardcoded number — same operational convention the broker
             # itself uses to raise its own spool-usage events.
             warn_at = vpn.get("eventMsgSpoolUsageThreshold", {}).get("setPercent", 80)
-            severity, usage_pct = classify_spool_usage(used_spool, max_spool, warn_percent=warn_at)
+            severity, usage_pct = classify_spool_usage(used_spool_mb, max_spool_mb, warn_percent=warn_at)
 
             events.append(
                 HealthEvent(
                     broker_id=self.broker_id,
                     severity=severity,
                     category=HealthCategory.SPOOL,
-                    message=f"spool usage {used_spool}/{max_spool} MB ({usage_pct:.1f}%) across VPN {vpn_name!r}",
+                    message=f"spool usage {used_spool_mb:.4f}/{max_spool_mb} MB ({usage_pct:.4f}%) across VPN {vpn_name!r}",
                     timestamp=_now_iso(),
                 )
             )
