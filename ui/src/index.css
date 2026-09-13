@@ -486,6 +486,7 @@ table.resource-table {
 }
 .empty-landing h2 { margin: 0 0 10px; font-size: 1.2rem; }
 .empty-landing p { max-width: 480px; margin: 0 auto 22px; color: var(--ink-secondary); font-size: 0.92rem; }
+.empty-landing-actions { display: flex; gap: 10px; justify-content: center; }
 
 .add-broker-panel {
   background: var(--surface);
@@ -520,6 +521,40 @@ table.resource-table {
 .form-row-checkbox input { width: auto; }
 
 .form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+
+.import-brokers-form p.muted { margin: 0 0 14px; }
+.import-brokers-form code {
+  background: var(--surface-sunken, rgba(127, 127, 127, 0.12));
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+}
+
+.import-results {
+  list-style: none;
+  margin: 0 0 4px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.import-result {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+.import-result-ok { border-color: var(--status-good); background: var(--badge-good-bg); }
+.import-result-skip { border-color: var(--status-warning); background: var(--badge-warn-bg); }
+.import-result-status { font-size: 0.78rem; color: var(--ink-secondary); }
+.import-result-detail { flex-basis: 100%; font-size: 0.78rem; }
 
 /* -- Resource detail ----------------------------------------------------- */
 

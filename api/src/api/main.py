@@ -5,6 +5,8 @@ Run with: uvicorn api.main:app --reload --port 8000
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel
 
 from fastapi import FastAPI, HTTPException, Query
@@ -57,6 +59,26 @@ class CreateBrokerRequest(BaseModel):
     config: dict
 
 
+class BrokerImportResult(BaseModel):
+    """One entry's outcome from POST /api/brokers/import — see that
+    endpoint's docstring for why this is a per-entry report rather than
+    an all-or-nothing batch.
+    """
+
+    name: str
+    type: models.SystemType
+    status: Literal["added", "duplicate_name", "duplicate_connection", "invalid", "connection_failed"]
+    detail: str
+    broker: models.Broker | None = None
+
+
+class ImportBrokersRequest(BaseModel):
+    # Deliberately the same shape as config/brokers.json's top-level
+    # object (extra fields like a file's own "id" are just ignored —
+    # pydantic v2's default) so that file can be uploaded as-is.
+    brokers: list[CreateBrokerRequest]
+
+
 @app.get("/api/system-types", response_model=list[SystemTypeInfo])
 def get_system_types():
     """Drives the "add broker" form's system-type dropdown and, once
@@ -75,20 +97,32 @@ def get_brokers():
     return brokers
 
 
-@app.post("/api/brokers", response_model=models.Broker, status_code=201)
-def create_broker(req: CreateBrokerRequest):
+def _add_one_broker(req: CreateBrokerRequest) -> BrokerImportResult:
+    """The actual add-a-broker logic, shared by the single POST /api/brokers
+    below and the bulk importer — same checks, same order (cheapest/local
+    checks before ever touching the network), in both places. Returns a
+    result rather than raising, so a bulk import of N brokers can report
+    "M added, the rest skipped and why" instead of an all-or-nothing
+    HTTPException on the first bad entry. Does NOT call
+    save_broker_configs — callers persist once, after all their entries
+    are done, so an import of 20 brokers doesn't rewrite the file 20 times.
+    """
     field_errors = validate_broker_config_fields(req.type, req.config)
     if field_errors:
-        raise HTTPException(status_code=400, detail="; ".join(field_errors))
+        return BrokerImportResult(name=req.name, type=req.type, status="invalid", detail="; ".join(field_errors))
 
     broker_id = slugify(req.name)
     if _registry.get_config(broker_id) is not None:
-        raise HTTPException(status_code=409, detail=f"a broker named {req.name!r} already exists")
+        return BrokerImportResult(
+            name=req.name, type=req.type, status="duplicate_name", detail=f"a broker named {req.name!r} already exists"
+        )
 
     duplicate = _registry.find_duplicate(req.type, req.config)
     if duplicate is not None:
-        raise HTTPException(
-            status_code=409,
+        return BrokerImportResult(
+            name=req.name,
+            type=req.type,
+            status="duplicate_connection",
             detail=f"{SYSTEM_TYPE_LABELS[req.type]} broker {duplicate.name!r} already points at this same connection",
         )
 
@@ -98,11 +132,48 @@ def create_broker(req: CreateBrokerRequest):
     # docstring. Nothing is persisted if this doesn't work.
     error = _registry.test_connection(bc)
     if error is not None:
-        raise HTTPException(status_code=422, detail=f"couldn't connect: {error}")
+        return BrokerImportResult(name=req.name, type=req.type, status="connection_failed", detail=f"couldn't connect: {error}")
 
     _registry.add_broker(bc)
+    broker = models.Broker(id=bc.id, system_type=bc.type, name=bc.name, environment=bc.environment, status="up")
+    return BrokerImportResult(name=req.name, type=req.type, status="added", detail="added", broker=broker)
+
+
+_IMPORT_STATUS_TO_HTTP_CODE = {
+    "invalid": 400,
+    "duplicate_name": 409,
+    "duplicate_connection": 409,
+    "connection_failed": 422,
+}
+
+
+@app.post("/api/brokers", response_model=models.Broker, status_code=201)
+def create_broker(req: CreateBrokerRequest):
+    result = _add_one_broker(req)
+    if result.status != "added":
+        raise HTTPException(status_code=_IMPORT_STATUS_TO_HTTP_CODE[result.status], detail=result.detail)
     save_broker_configs(_registry.broker_configs)
-    return models.Broker(id=bc.id, system_type=bc.type, name=bc.name, environment=bc.environment, status="up")
+    return result.broker
+
+
+@app.post("/api/brokers/import", response_model=list[BrokerImportResult])
+def import_brokers(req: ImportBrokersRequest):
+    """Bulk version of POST /api/brokers — add several brokers at once
+    from a brokers.json-shaped file instead of the add-broker form once
+    per broker. Each entry gets exactly the same validation, duplicate-
+    name, duplicate-connection, and connection-test checks as a single
+    add (see _add_one_broker). Always returns 200 with one result per
+    entry rather than failing the whole request on the first bad one —
+    the UI renders per-entry status so a mostly-good file still gets
+    (say) 8 of 10 brokers added instead of zero. Entries are processed
+    in order and checked against each other too, so two entries in the
+    same file pointing at the same connection correctly leaves only the
+    first one added.
+    """
+    results = [_add_one_broker(entry) for entry in req.brokers]
+    if any(r.status == "added" for r in results):
+        save_broker_configs(_registry.broker_configs)
+    return results
 
 
 @app.delete("/api/brokers/{broker_id}", status_code=204)

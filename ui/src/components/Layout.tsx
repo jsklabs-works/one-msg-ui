@@ -9,6 +9,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useMonitoringData } from "../context/MonitoringDataContext";
 import { healthForBroker, worstSeverity } from "../healthUtils";
 import AddBrokerForm from "./AddBrokerForm";
+import ImportBrokersForm from "./ImportBrokersForm";
 import ThemeToggle from "./ThemeToggle";
 import type { Broker } from "../api";
 
@@ -23,6 +24,7 @@ function tabDotClass(broker: Broker, health: ReturnType<typeof healthForBroker>)
 export default function Layout() {
   const { brokers, health, loading, error, reload } = useMonitoringData();
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showImportForm, setShowImportForm] = useState(false);
   const navigate = useNavigate();
 
   const noBrokersConfigured = !loading && brokers.length === 0;
@@ -36,7 +38,22 @@ export default function Layout() {
         </h1>
         <div className="header-actions">
           <ThemeToggle />
-          <button onClick={() => setShowAddForm((v) => !v)}>{showAddForm ? "Close" : "+ Add broker"}</button>
+          <button
+            onClick={() => {
+              setShowAddForm((v) => !v);
+              setShowImportForm(false);
+            }}
+          >
+            {showAddForm ? "Close" : "+ Add broker"}
+          </button>
+          <button
+            onClick={() => {
+              setShowImportForm((v) => !v);
+              setShowAddForm(false);
+            }}
+          >
+            {showImportForm ? "Close" : "Import JSON"}
+          </button>
           <button onClick={reload} disabled={loading}>
             {loading ? "Refreshing…" : "Refresh"}
           </button>
@@ -58,7 +75,13 @@ export default function Layout() {
         </section>
       )}
 
-      {noBrokersConfigured && !showAddForm ? (
+      {showImportForm && (
+        <section className="add-broker-panel">
+          <ImportBrokersForm onImported={reload} onCancel={() => setShowImportForm(false)} />
+        </section>
+      )}
+
+      {noBrokersConfigured && !showAddForm && !showImportForm ? (
         <section className="empty-landing">
           <div className="empty-landing-icon" aria-hidden="true">📡</div>
           <h2>No message brokers configured yet</h2>
@@ -66,11 +89,14 @@ export default function Layout() {
             Connect a broker to start monitoring queue depth, consumer lag, and health — or browse messages
             non-destructively. Supported today: Apache Kafka, Solace PubSub+, and IBM MQ.
           </p>
-          <button onClick={() => setShowAddForm(true)}>+ Add your first broker</button>
+          <div className="empty-landing-actions">
+            <button onClick={() => setShowAddForm(true)}>+ Add your first broker</button>
+            <button onClick={() => setShowImportForm(true)}>Import from JSON</button>
+          </div>
         </section>
       ) : (
         <>
-          {!showAddForm && (
+          {!showAddForm && !showImportForm && (
             <nav className="tab-bar">
               <NavLink to="/" end className={({ isActive }) => `tab${isActive ? " tab-active" : ""}`}>
                 Dashboard

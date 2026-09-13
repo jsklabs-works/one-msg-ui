@@ -18,6 +18,8 @@ All three pages read from one shared poll ([`context/MonitoringDataContext.tsx`]
 
 [`components/AddBrokerForm.tsx`](src/components/AddBrokerForm.tsx) is reachable from the "+ Add broker" button in the header (always visible, on every tab) or the empty-state landing page (zero brokers configured). It fetches `GET /api/system-types` and renders whatever fields come back — the form has no hardcoded knowledge of what Kafka vs. Solace vs. MQ need, including their real TLS/SASL options (see [api/README.md's TLS/SASL section](../api/README.md#tlssasl)). Submitting actually tries to connect (`POST /api/brokers`) before anything is saved; a bad host/port/credential shows the real connection error inline rather than silently saving a broken broker. On success it navigates straight to the new broker's tab. Each broker's own tab has a "Remove this broker" action (inline yes/no confirm, not a native `confirm()` dialog — those don't play well with automated browser testing and are generally worse UX) so the empty state is actually reachable through the UI, not just by hand-editing `brokers.json`.
 
+Next to it, "Import JSON" ([`components/ImportBrokersForm.tsx`](src/components/ImportBrokersForm.tsx)) adds several brokers at once from a file shaped like [`api/config/brokers.json`](../api/config/brokers.json) itself (a top-level `brokers` array), rather than filling the single-broker form once per entry — handy for standing up a fresh instance from an existing inventory. It's client-side JSON parsing plus one call to `POST /api/brokers/import`; the API runs the exact same validation/duplicate-name/duplicate-connection/connection-test checks per entry as the single-add form (see [api/README.md's duplicate-connection section](../api/README.md#duplicate-connection-detection)), and one bad entry never blocks the rest — the response is a per-entry result list, rendered as a status per broker ("Added" / "Skipped — ..." with the real reason) rather than one pass/fail for the whole file. Verified live with a 3-entry file where two entries duplicated already-configured brokers and one had a wrong password: each got its own correct status and detail, nothing was added, and the dashboard's broker list was untouched.
+
 ## Layout
 
 ```
@@ -37,6 +39,7 @@ src/
   components/StatsSummary.tsx  the stat-tile row (brokers online, resources, health issues,
                               consumer lag) — derived client-side from data already fetched
   components/AddBrokerForm.tsx  dynamic add-broker form, driven by GET /api/system-types
+  components/ImportBrokersForm.tsx  bulk add from a brokers.json-shaped file, one result per entry
   labels.ts                  NAMESPACE_LABELS — VPN / Queue manager / Cluster, per system type
   pages/Dashboard.tsx        the "/" tab: stats + read-only cross-broker table
   pages/BrokerView.tsx       the "/brokers/:brokerId" tab: one broker's health/resources/remove

@@ -91,6 +91,21 @@ export interface CreateBrokerRequest {
   config: Record<string, string>;
 }
 
+// One entry of a bulk import — the same shape as CreateBrokerRequest, and
+// (deliberately) the same shape as one item of api/config/brokers.json's
+// top-level "brokers" array, so that file can be uploaded as-is.
+export type BrokerImportEntry = CreateBrokerRequest;
+
+export type BrokerImportStatus = "added" | "duplicate_name" | "duplicate_connection" | "invalid" | "connection_failed";
+
+export interface BrokerImportResult {
+  name: string;
+  type: SystemType;
+  status: BrokerImportStatus;
+  detail: string;
+  broker: Broker | null;
+}
+
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8010";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -135,6 +150,14 @@ export const api = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(req),
+    }),
+  // Bulk add — same checks per-entry as createBroker, but reports one
+  // result per entry instead of failing the whole request on entry #1.
+  importBrokers: (brokers: BrokerImportEntry[]) =>
+    request<BrokerImportResult[]>("/api/brokers/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ brokers }),
     }),
   deleteBroker: (brokerId: string) =>
     request<void>(`/api/brokers/${encodeURIComponent(brokerId)}`, { method: "DELETE" }),
