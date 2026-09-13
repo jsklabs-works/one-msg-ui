@@ -7,10 +7,29 @@
 
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { api, type MessageSample } from "../api";
+import { api, type MessageSample, type Resource } from "../api";
 import { SeverityBadge, SystemTypeBadge } from "../components/Badges";
 import { useMonitoringData } from "../context/MonitoringDataContext";
 import { NAMESPACE_LABELS } from "../labels";
+
+// Saves the payload shown on screen — note that's the same body_preview
+// the peek endpoint already truncates server-side (a safety cap, not a
+// display-only one: the full body is never fetched past that point), so
+// a "(truncated)" download is honestly labeled as such rather than
+// silently handing over an incomplete file with no indication.
+function downloadMessageContent(resource: Resource, message: MessageSample, index: number) {
+  const blob = new Blob([message.body_preview], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const safeResourceName = resource.name.replace(/[^a-zA-Z0-9_.-]/g, "_");
+  const safeIdPart = (message.message_id ?? String(index + 1)).replace(/[^a-zA-Z0-9_.-]/g, "_");
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${safeResourceName}-${safeIdPart}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
 
 // A peek failure that looks like bad/missing credentials gets an inline
 // retry prompt instead of a dead-end error — SEMP admin credentials are
@@ -238,6 +257,7 @@ export default function ResourceDetail() {
             <ul className="message-list">
               {messages.map((m, i) => {
                 const propertyEntries = Object.entries(m.headers);
+                const truncated = m.body_preview.endsWith("... [truncated]");
                 return (
                   <li key={i} className="message-card">
                     <div className="message-meta">
@@ -246,7 +266,9 @@ export default function ResourceDetail() {
                       {m.timestamp !== null && <span> · {m.timestamp}</span>}
                       <span> · {m.size_bytes} bytes</span>
                     </div>
-                    {propertyEntries.length > 0 && (
+
+                    <div className="message-section-label">Headers</div>
+                    {propertyEntries.length > 0 ? (
                       <dl className="message-properties">
                         {propertyEntries.map(([key, value]) => (
                           <div key={key} className="message-property">
@@ -255,7 +277,21 @@ export default function ResourceDetail() {
                           </div>
                         ))}
                       </dl>
+                    ) : (
+                      <p className="muted message-no-headers">No headers on this message.</p>
                     )}
+
+                    <div className="message-section-label-row">
+                      <span className="message-section-label">Payload</span>
+                      <button
+                        type="button"
+                        className="link-button"
+                        onClick={() => downloadMessageContent(resource, m, i)}
+                        title={truncated ? "Downloads the same truncated preview shown here — the full body was never fetched" : "Download this message's payload"}
+                      >
+                        Download{truncated ? " (truncated)" : ""}
+                      </button>
+                    </div>
                     <pre className="message-body">{m.body_preview}</pre>
                   </li>
                 );
