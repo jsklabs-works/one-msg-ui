@@ -159,3 +159,24 @@ def get_resource_messages(resource_id: str, limit: int = Query(default=10, ge=1,
         # this under "Messages (non-destructive peek)" and adds its own
         # label; doubling it up read as "Peek failed: peek failed: ...".
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+class PeekWithCredentials(BaseModel):
+    limit: int = 10
+    username: str
+    password: str
+
+
+@app.post("/api/resources/{resource_id}/messages", response_model=list[models.MessageSample])
+def post_resource_messages(resource_id: str, body: PeekWithCredentials):
+    """Retry a peek with different credentials for just this call — a
+    password has no business in a URL query string, hence POST rather than
+    a `?username=&password=` on the GET above. Used when a VPN/queue needs
+    credentials the saved broker config doesn't have (see aggregator.peek's
+    docstring); nothing here is persisted to the broker config.
+    """
+    resource = _find_resource(resource_id)
+    try:
+        return _registry.peek(resource, limit=body.limit, override_username=body.username, override_password=body.password)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc

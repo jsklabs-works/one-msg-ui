@@ -12,6 +12,17 @@ import { SeverityBadge, SystemTypeBadge } from "../components/Badges";
 import { useMonitoringData } from "../context/MonitoringDataContext";
 import { NAMESPACE_LABELS } from "../labels";
 
+// A peek failure that looks like bad/missing credentials gets an inline
+// retry prompt instead of a dead-end error — SEMP admin credentials are
+// broker-wide, but Solace's SMF connection for peek authenticates per
+// VPN, so a VPN can genuinely need different credentials than the ones
+// saved on the broker (see aggregator.peek's docstring). Anything else
+// (network error, queue not found, etc.) just shows the error as before,
+// since new credentials wouldn't fix those.
+function looksLikeAuthError(message: string): boolean {
+  return /incorrect|unauthorized|login|credential|auth|401|403/i.test(message);
+}
+
 export default function ResourceDetail() {
   const { resourceId = "" } = useParams<{ resourceId: string }>();
   const { resources, health, consumerGroups, loading } = useMonitoringData();
@@ -20,6 +31,10 @@ export default function ResourceDetail() {
   const [peekError, setPeekError] = useState<string | null>(null);
   const [peeking, setPeeking] = useState(false);
   const [limit, setLimit] = useState(10);
+
+  const [showCredentialPrompt, setShowCredentialPrompt] = useState(false);
+  const [credUsername, setCredUsername] = useState("");
+  const [credPassword, setCredPassword] = useState("");
 
   const resource = resources.find((r) => r.id === resourceId) ?? null;
   const brokerHealth = resource ? health.filter((h) => h.broker_id === resource.broker_id) : [];
@@ -31,10 +46,29 @@ export default function ResourceDetail() {
   async function handlePeek() {
     setPeeking(true);
     setPeekError(null);
+    setShowCredentialPrompt(false);
     try {
       setMessages(await api.peekMessages(resourceId, limit));
     } catch (e) {
-      setPeekError(e instanceof Error ? e.message : String(e));
+      const message = e instanceof Error ? e.message : String(e);
+      setPeekError(message);
+      if (looksLikeAuthError(message)) setShowCredentialPrompt(true);
+    } finally {
+      setPeeking(false);
+    }
+  }
+
+  async function handleRetryWithCredentials(e: React.FormEvent) {
+    e.preventDefault();
+    setPeeking(true);
+    setPeekError(null);
+    try {
+      setMessages(await api.peekMessagesWithCredentials(resourceId, limit, credUsername, credPassword));
+      setShowCredentialPrompt(false);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setPeekError(message);
+      // stay open — wrong credentials twice is still a credentials problem
     } finally {
       setPeeking(false);
     }
@@ -166,6 +200,36 @@ export default function ResourceDetail() {
         </div>
 
         {peekError && <div className="error-banner">Peek failed: {peekError}</div>}
+
+        {showCredentialPrompt && (
+          <form className="credential-prompt" onSubmit={handleRetryWithCredentials}>
+            <p className="muted">
+              This looks like a credentials problem, not a connection one — SEMP admin credentials are broker-wide, but
+              {resource.system_type === "solace" ? " this VPN's" : " this resource's"} message connection authenticates
+              separately. Try different credentials just for this peek (nothing is saved):
+            </p>
+            <div className="form-row">
+              <label>
+                Username
+                <input value={credUsername} onChange={(e) => setCredUsername(e.target.value)} required autoFocus />
+              </label>
+            </div>
+            <div className="form-row">
+              <label>
+                Password
+                <input type="password" value={credPassword} onChange={(e) => setCredPassword(e.target.value)} required />
+              </label>
+            </div>
+            <div className="form-actions">
+              <button type="button" onClick={() => setShowCredentialPrompt(false)} disabled={peeking}>
+                Cancel
+              </button>
+              <button type="submit" disabled={peeking}>
+                {peeking ? "Retrying…" : "Retry peek"}
+              </button>
+            </div>
+          </form>
+        )}
 
         {messages !== null &&
           (messages.length === 0 ? (

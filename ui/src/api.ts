@@ -120,6 +120,15 @@ export const api = {
     getJSON<ConsumerGroup[]>(`/api/consumer-groups${brokerId ? `?broker_id=${encodeURIComponent(brokerId)}` : ""}`),
   peekMessages: (resourceId: string, limit = 10) =>
     getJSON<MessageSample[]>(`/api/resources/${encodeURIComponent(resourceId)}/messages?limit=${limit}`),
+  // A password has no business in a URL query string, so retrying with
+  // different credentials goes over POST instead of the GET above.
+  // Nothing here is saved to the broker config — just this one retry.
+  peekMessagesWithCredentials: (resourceId: string, limit: number, username: string, password: string) =>
+    request<MessageSample[]>(`/api/resources/${encodeURIComponent(resourceId)}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ limit, username, password }),
+    }),
   getSystemTypes: () => getJSON<SystemTypeInfo[]>("/api/system-types"),
   createBroker: (req: CreateBrokerRequest) =>
     request<Broker>("/api/brokers", {

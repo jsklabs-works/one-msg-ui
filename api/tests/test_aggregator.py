@@ -103,3 +103,63 @@ def test_test_connection_returns_error_message_on_failure():
         error = registry.test_connection(bc)
     assert error is not None
     assert "nope" in error
+
+
+# -- peek() credential override -----------------------------------------
+# The point: a peek retry with different credentials must never need (or
+# touch) whatever's saved in the broker config — proven here by giving
+# Solace/MQ configs that are missing username/password entirely and
+# confirming the override alone is what gets used.
+
+
+def test_peek_solace_uses_override_credentials_not_saved_config():
+    from api.models import Resource
+
+    bc = BrokerConfig(
+        id="b2", type="solace", name="B2", environment="dev",
+        config={"smf_host": "tcp://x:55555", "username": "saved-user", "password": "saved-pass"},
+    )
+    registry = BrokerRegistry([bc])
+    resource = Resource(id="b2:testVPN:q1", broker_id="b2", system_type="solace", namespace="testVPN", name="q1", kind="queue")
+
+    with patch("solace_adapter.peek.peek_messages", return_value=[]) as mock_peek:
+        registry.peek(resource, limit=5, override_username="override-user", override_password="override-pass")
+
+    assert mock_peek.call_args.kwargs["username"] == "override-user"
+    assert mock_peek.call_args.kwargs["password"] == "override-pass"
+    assert mock_peek.call_args.kwargs["vpn_name"] == "testVPN"
+
+
+def test_peek_solace_falls_back_to_saved_config_without_override():
+    from api.models import Resource
+
+    bc = BrokerConfig(
+        id="b2", type="solace", name="B2", environment="dev",
+        config={"smf_host": "tcp://x:55555", "username": "saved-user", "password": "saved-pass"},
+    )
+    registry = BrokerRegistry([bc])
+    resource = Resource(id="b2:default:q1", broker_id="b2", system_type="solace", namespace="default", name="q1", kind="queue")
+
+    with patch("solace_adapter.peek.peek_messages", return_value=[]) as mock_peek:
+        registry.peek(resource, limit=5)
+
+    assert mock_peek.call_args.kwargs["username"] == "saved-user"
+    assert mock_peek.call_args.kwargs["password"] == "saved-pass"
+
+
+def test_peek_mq_uses_override_credentials_not_saved_config():
+    from api.models import Resource
+
+    bc = BrokerConfig(
+        id="b3", type="mq", name="B3", environment="dev",
+        config={"admin_url": "https://x", "qmgr_name": "QM1", "app_username": "saved-user", "app_password": "saved-pass"},
+    )
+    registry = BrokerRegistry([bc])
+    resource = Resource(id="b3:QM1:Q1", broker_id="b3", system_type="mq", namespace="QM1", name="Q1", kind="queue")
+
+    with patch("mq_adapter.peek.peek_messages", return_value=[]) as mock_peek:
+        registry.peek(resource, limit=5, override_username="override-user", override_password="override-pass")
+
+    # session.auth was set from the override before being passed in
+    used_session = mock_peek.call_args.kwargs["session"]
+    assert used_session.auth == ("override-user", "override-pass")

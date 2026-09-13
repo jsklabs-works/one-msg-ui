@@ -173,7 +173,22 @@ class BrokerRegistry:
 
         return brokers, all_resources, all_health, all_groups
 
-    def peek(self, resource: models.Resource, limit: int = 10) -> list[models.MessageSample]:
+    def peek(
+        self,
+        resource: models.Resource,
+        limit: int = 10,
+        override_username: str | None = None,
+        override_password: str | None = None,
+    ) -> list[models.MessageSample]:
+        """override_username/password let a caller retry with different
+        credentials for just this call, without touching the saved broker
+        config — the point being Solace in particular: SEMP admin
+        credentials are broker-wide, but an SMF connection for peek
+        authenticates per VPN, and a VPN can genuinely need its own
+        username/password that the broker-level config doesn't have (see
+        adapters/solace/README.md). Neither override is persisted; the UI
+        prompts for them fresh each time a peek fails on auth.
+        """
         bc = self.get_config(resource.broker_id)
         if bc is None:
             raise KeyError(f"no such broker: {resource.broker_id}")
@@ -181,12 +196,17 @@ class BrokerRegistry:
         if bc.type == "kafka":
             from kafka_adapter.peek import peek_messages
 
+            security_kwargs = _kafka_security_kwargs(bc.config)
+            if override_username:
+                security_kwargs["sasl_mechanism"] = security_kwargs["sasl_mechanism"] or "PLAIN"
+                security_kwargs["sasl_plain_username"] = override_username
+                security_kwargs["sasl_plain_password"] = override_password
             samples = peek_messages(
                 bootstrap_servers=bc.config["bootstrap_servers"],
                 resource_id=resource.id,
                 topic=resource.name,
                 limit=limit,
-                **_kafka_security_kwargs(bc.config),
+                **security_kwargs,
             )
             return [normalize.kafka_message_sample(m) for m in samples]
 
@@ -201,8 +221,8 @@ class BrokerRegistry:
                 # names the right one regardless of how many VPNs this
                 # broker connection spans.
                 vpn_name=resource.namespace,
-                username=bc.config["username"],
-                password=bc.config["password"],
+                username=override_username or bc.config["username"],
+                password=override_password if override_username else bc.config["password"],
                 resource_id=resource.id,
                 queue_name=resource.name,
                 limit=limit,
@@ -216,7 +236,7 @@ class BrokerRegistry:
             from mq_adapter.peek import peek_messages
 
             session = requests.Session()
-            session.auth = (bc.config["app_username"], bc.config["app_password"])
+            session.auth = (override_username or bc.config["app_username"], override_password if override_username else bc.config["app_password"])
             session.verify = config_bool(bc.config, "verify_tls", False)
             try:
                 samples = peek_messages(

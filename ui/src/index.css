@@ -495,6 +495,17 @@ table.resource-table {
   margin-bottom: 22px;
 }
 
+.credential-prompt {
+  background: var(--surface);
+  border: 1px solid var(--status-warning);
+  border-radius: 12px;
+  padding: 18px;
+  margin-bottom: 18px;
+  max-width: 420px;
+}
+.credential-prompt .form-row { margin-bottom: 12px; }
+.credential-prompt .form-actions { margin-top: 14px; }
+
 .add-broker-form fieldset {
   border: 1px solid var(--border);
   border-radius: 10px;
