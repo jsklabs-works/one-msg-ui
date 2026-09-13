@@ -17,7 +17,6 @@
       "config": {
         "semp_url": "http://localhost:8080",
         "smf_host": "tcp://localhost:55554",
-        "vpn_name": "default",
         "username": "admin",
         "password": "admin"
       }

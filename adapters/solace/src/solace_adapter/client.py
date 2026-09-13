@@ -28,16 +28,30 @@ def _now_iso() -> str:
 
 
 class SolaceAdapter:
-    """One instance per broker, scoped to a single Message VPN — Solace's
-    two-level scoping (VPN -> queue/topic) is why `vpn_name` is required
-    rather than optional, per architecture.md's explicit warning against
-    flattening that away.
+    """One instance per broker. Solace's two-level scoping (VPN ->
+    queue/topic) means "broker" and "VPN" are not the same thing — a
+    single broker connection can span multiple VPNs, discovered
+    dynamically (verified live: creating a new VPN on the broker and
+    re-fetching picks it up with no config change). `vpn_name` is an
+    optional *filter* to pin the connection to one VPN when that's
+    actually wanted (e.g. credentials scoped to just one tenant); leave
+    it unset to see every VPN those credentials can reach — the
+    architecture doc's warning against flattening VPN scoping away
+    applies just as much to hardcoding a single VPN at connection time.
     """
 
-    def __init__(self, broker_id: str, base_url: str, vpn_name: str, username: str, password: str, verify_certificate: bool = True):
+    def __init__(
+        self,
+        broker_id: str,
+        base_url: str,
+        username: str,
+        password: str,
+        vpn_name: str | None = None,
+        verify_certificate: bool = True,
+    ):
         self.broker_id = broker_id
         self.base_url = base_url.rstrip("/")
-        self.vpn_name = vpn_name
+        self.vpn_name = vpn_name or None  # "" from a form field means "no filter", same as None
         self._session = requests.Session()
         self._session.auth = (username, password)
         # Explicit rather than relying on requests' own True default — dev
@@ -72,56 +86,71 @@ class SolaceAdapter:
             query["cursor"] = cursor
         return items
 
+    def _list_vpn_names(self) -> list[str]:
+        """All VPNs these credentials can see, or just the configured one
+        if `vpn_name` was set as a filter.
+        """
+        if self.vpn_name:
+            return [self.vpn_name]
+        vpns = self._get_all_pages("/SEMP/v2/monitor/msgVpns")
+        return [v["msgVpnName"] for v in vpns]
+
     # -- resources ----------------------------------------------------------
 
     def get_resources(self) -> list[Resource]:
-        queues = self._get_all_pages(f"/SEMP/v2/monitor/msgVpns/{self.vpn_name}/queues")
         resources = []
-        for q in queues:
-            name = q["queueName"]
-            resources.append(
-                Resource(
-                    id=f"{self.broker_id}:{self.vpn_name}:{name}",
-                    broker_id=self.broker_id,
-                    namespace=self.vpn_name,
-                    name=name,
-                    kind="queue",
-                    depth_current=q.get("spooledMsgCount"),
-                    depth_max=q.get("maxMsgSpoolUsage"),
-                    consumer_lag=None,  # no per-consumer offset model for Solace queues
-                    spooled_bytes=q.get("spooledByteCount"),
-                    last_updated=_now_iso(),
+        for vpn_name in self._list_vpn_names():
+            queues = self._get_all_pages(f"/SEMP/v2/monitor/msgVpns/{vpn_name}/queues")
+            for q in queues:
+                name = q["queueName"]
+                resources.append(
+                    Resource(
+                        id=f"{self.broker_id}:{vpn_name}:{name}",
+                        broker_id=self.broker_id,
+                        namespace=vpn_name,
+                        name=name,
+                        kind="queue",
+                        depth_current=q.get("spooledMsgCount"),
+                        depth_max=q.get("maxMsgSpoolUsage"),
+                        consumer_lag=None,  # no per-consumer offset model for Solace queues
+                        spooled_bytes=q.get("spooledByteCount"),
+                        last_updated=_now_iso(),
+                    )
                 )
-            )
         return resources
 
     # -- health -------------------------------------------------------------
 
     def get_health_events(self) -> list[HealthEvent]:
-        vpn = self._get(f"/SEMP/v2/monitor/msgVpns/{self.vpn_name}")["data"]
+        events: list[HealthEvent] = []
+        for vpn_name in self._list_vpn_names():
+            vpn = self._get(f"/SEMP/v2/monitor/msgVpns/{vpn_name}")["data"]
 
-        connectivity = HealthEvent(
-            broker_id=self.broker_id,
-            severity=classify_vpn_connectivity(vpn.get("state"), vpn.get("enabled")),
-            category=HealthCategory.CONNECTIVITY,
-            message=f"VPN {self.vpn_name!r} state={vpn.get('state')} enabled={vpn.get('enabled')}",
-            timestamp=_now_iso(),
-        )
+            events.append(
+                HealthEvent(
+                    broker_id=self.broker_id,
+                    severity=classify_vpn_connectivity(vpn.get("state"), vpn.get("enabled")),
+                    category=HealthCategory.CONNECTIVITY,
+                    message=f"VPN {vpn_name!r} state={vpn.get('state')} enabled={vpn.get('enabled')}",
+                    timestamp=_now_iso(),
+                )
+            )
 
-        max_spool = vpn.get("maxMsgSpoolUsage") or 0
-        used_spool = vpn.get("msgSpoolUsage") or 0
-        # Use the VPN's own configured event threshold rather than a
-        # hardcoded number — same operational convention the broker itself
-        # uses to raise its own spool-usage events.
-        warn_at = vpn.get("eventMsgSpoolUsageThreshold", {}).get("setPercent", 80)
-        severity, usage_pct = classify_spool_usage(used_spool, max_spool, warn_percent=warn_at)
+            max_spool = vpn.get("maxMsgSpoolUsage") or 0
+            used_spool = vpn.get("msgSpoolUsage") or 0
+            # Use the VPN's own configured event threshold rather than a
+            # hardcoded number — same operational convention the broker
+            # itself uses to raise its own spool-usage events.
+            warn_at = vpn.get("eventMsgSpoolUsageThreshold", {}).get("setPercent", 80)
+            severity, usage_pct = classify_spool_usage(used_spool, max_spool, warn_percent=warn_at)
 
-        spool = HealthEvent(
-            broker_id=self.broker_id,
-            severity=severity,
-            category=HealthCategory.SPOOL,
-            message=f"spool usage {used_spool}/{max_spool} MB ({usage_pct:.1f}%) across VPN {self.vpn_name!r}",
-            timestamp=_now_iso(),
-        )
-
-        return [connectivity, spool]
+            events.append(
+                HealthEvent(
+                    broker_id=self.broker_id,
+                    severity=severity,
+                    category=HealthCategory.SPOOL,
+                    message=f"spool usage {used_spool}/{max_spool} MB ({usage_pct:.1f}%) across VPN {vpn_name!r}",
+                    timestamp=_now_iso(),
+                )
+            )
+        return events

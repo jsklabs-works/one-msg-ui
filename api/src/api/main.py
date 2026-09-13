@@ -155,4 +155,7 @@ def get_resource_messages(resource_id: str, limit: int = Query(default=10, ge=1,
     try:
         return _registry.peek(resource, limit=limit)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"peek failed: {exc}") from exc
+        # Raw detail, no "peek failed:" prefix here — the UI already frames
+        # this under "Messages (non-destructive peek)" and adds its own
+        # label; doubling it up read as "Peek failed: peek failed: ...".
+        raise HTTPException(status_code=502, detail=str(exc)) from exc

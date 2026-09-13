@@ -104,7 +104,10 @@ class BrokerRegistry:
         adapter = SolaceAdapter(
             broker_id=bc.id,
             base_url=bc.config["semp_url"],
-            vpn_name=bc.config["vpn_name"],
+            # Optional filter, not a required scope — unset means "every VPN
+            # these credentials can see" (see SolaceAdapter's docstring for
+            # why a broker connection was never really "one VPN").
+            vpn_name=bc.config.get("vpn_name") or None,
             username=bc.config["username"],
             password=bc.config["password"],
             verify_certificate=config_bool(bc.config, "verify_certificate", True),
@@ -192,7 +195,12 @@ class BrokerRegistry:
 
             samples = peek_messages(
                 smf_host=bc.config["smf_host"],
-                vpn_name=bc.config["vpn_name"],
+                # The resource's own VPN, not the broker config's (possibly
+                # unset, "all VPNs") filter — an SMF connection is always
+                # scoped to exactly one VPN, and `resource.namespace` always
+                # names the right one regardless of how many VPNs this
+                # broker connection spans.
+                vpn_name=resource.namespace,
                 username=bc.config["username"],
                 password=bc.config["password"],
                 resource_id=resource.id,

@@ -40,6 +40,8 @@ def cmd_queues(args: argparse.Namespace) -> None:
 
 
 def cmd_peek(args: argparse.Namespace) -> None:
+    if not args.vpn:
+        raise SystemExit("peek needs --vpn: an SMF connection is always scoped to one VPN, unlike `queues` (which can discover all)")
     samples = peek_messages(
         smf_host=args.smf_host,
         vpn_name=args.vpn,
@@ -55,7 +57,7 @@ def cmd_peek(args: argparse.Namespace) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="solace-adapter")
     parser.add_argument("--broker-id", default="local-solace", help="id to tag normalized output with (Broker.id)")
-    parser.add_argument("--vpn", default="default", help="Message VPN name")
+    parser.add_argument("--vpn", default=None, help="Message VPN name — restricts `queues` to one VPN (omit to discover all); required for `peek`")
     parser.add_argument("--username", default="admin")
     parser.add_argument("--password", default="admin")
     sub = parser.add_subparsers(dest="command", required=True)

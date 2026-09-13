@@ -63,7 +63,12 @@ FIELD_SPECS: dict[SystemType, list[FieldSpec]] = {
     "solace": [
         FieldSpec(name="semp_url", label="SEMP v2 URL", type="text", placeholder="http://localhost:8080"),
         FieldSpec(name="smf_host", label="SMF host (for message peek)", type="text", placeholder="tcp://localhost:55554"),
-        FieldSpec(name="vpn_name", label="Message VPN", type="text", default="default"),
+        FieldSpec(
+            name="vpn_name",
+            label="Message VPN (leave blank to monitor every VPN these credentials can see)",
+            type="text",
+            required=False,
+        ),
         FieldSpec(name="username", label="Username", type="text", default="admin"),
         FieldSpec(name="password", label="Password", type="password"),
         FieldSpec(
