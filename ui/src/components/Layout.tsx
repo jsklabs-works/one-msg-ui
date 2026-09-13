@@ -11,7 +11,27 @@ import { healthForBroker, worstSeverity } from "../healthUtils";
 import AddBrokerForm from "./AddBrokerForm";
 import ImportBrokersForm from "./ImportBrokersForm";
 import ThemeToggle from "./ThemeToggle";
-import type { Broker } from "../api";
+import { api, type Broker } from "../api";
+
+// The other half of the import round trip — downloads exactly what
+// POST /api/brokers/import accepts, so exporting from one instance and
+// importing into another (or just backing up the current inventory)
+// needs no reshaping. Includes each broker's full config, credentials
+// included — same plaintext-in-JSON shape config/brokers.json already
+// is on disk (see api/src/api/config.py's module docstring), not new
+// exposure, but worth a person knowing before they email the file around.
+async function downloadBrokersExport() {
+  const { brokers } = await api.exportBrokers();
+  const blob = new Blob([JSON.stringify({ brokers }, null, 2)], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "brokers.json";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
 
 function tabDotClass(broker: Broker, health: ReturnType<typeof healthForBroker>) {
   if (broker.status !== "up") return "tab-dot status-critical";
@@ -25,9 +45,23 @@ export default function Layout() {
   const { brokers, health, loading, error, reload } = useMonitoringData();
   const [showAddForm, setShowAddForm] = useState(false);
   const [showImportForm, setShowImportForm] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const noBrokersConfigured = !loading && brokers.length === 0;
+
+  async function handleExport() {
+    setExporting(true);
+    setExportError(null);
+    try {
+      await downloadBrokersExport();
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setExporting(false);
+    }
+  }
 
   return (
     <div className="page">
@@ -54,6 +88,13 @@ export default function Layout() {
           >
             {showImportForm ? "Close" : "Import JSON"}
           </button>
+          <button
+            onClick={handleExport}
+            disabled={exporting || noBrokersConfigured}
+            title="Download every configured broker as JSON, including credentials in plain text"
+          >
+            {exporting ? "Exporting…" : "Export JSON"}
+          </button>
           <button onClick={reload} disabled={loading}>
             {loading ? "Refreshing…" : "Refresh"}
           </button>
@@ -61,6 +102,7 @@ export default function Layout() {
       </header>
 
       {error && <div className="error-banner">Couldn't load data: {error}</div>}
+      {exportError && <div className="error-banner">Couldn't export brokers: {exportError}</div>}
 
       {showAddForm && (
         <section className="add-broker-panel">

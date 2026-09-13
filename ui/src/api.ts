@@ -106,6 +106,18 @@ export interface BrokerImportResult {
   broker: Broker | null;
 }
 
+// GET /api/brokers/export's shape — one entry per configured broker, full
+// connection config (credentials included) so the same file can be fed
+// straight back into api.importBrokers or saved as another instance's
+// config/brokers.json.
+export interface BrokerExportEntry {
+  id: string;
+  type: SystemType;
+  name: string;
+  environment: string;
+  config: Record<string, string>;
+}
+
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8010";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -159,6 +171,7 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ brokers }),
     }),
+  exportBrokers: () => getJSON<{ brokers: BrokerExportEntry[] }>("/api/brokers/export"),
   deleteBroker: (brokerId: string) =>
     request<void>(`/api/brokers/${encodeURIComponent(brokerId)}`, { method: "DELETE" }),
 };

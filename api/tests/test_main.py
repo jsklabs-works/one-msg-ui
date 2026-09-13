@@ -83,6 +83,42 @@ def test_create_broker_allows_same_type_different_connection_and_reports_bad_con
     assert "couldn't connect" in resp.json()["detail"]
 
 
+def test_export_brokers_returns_every_configured_broker_in_full():
+    client = _client_with(
+        BrokerConfig(id="local-kafka", type="kafka", name="Local Kafka", environment="dev", config={"bootstrap_servers": "a:9092"}),
+        BrokerConfig(
+            id="local-solace",
+            type="solace",
+            name="Local Solace",
+            environment="dev",
+            config={"semp_url": "http://localhost:8080", "username": "admin", "password": "admin"},
+        ),
+    )
+    resp = client.get("/api/brokers/export")
+    assert resp.status_code == 200
+    exported = resp.json()["brokers"]
+    assert [b["id"] for b in exported] == ["local-kafka", "local-solace"]
+    # Full config round-trips, credentials included — this is the same
+    # plaintext-in-JSON shape config/brokers.json already is on disk.
+    assert exported[1]["config"]["password"] == "admin"
+
+
+def test_export_then_import_round_trips_without_duplicate_errors_on_a_fresh_instance():
+    source = _client_with(
+        BrokerConfig(id="local-kafka", type="kafka", name="Local Kafka", environment="dev", config={"bootstrap_servers": "a:9092"})
+    )
+    exported = source.get("/api/brokers/export").json()
+
+    # A different (empty) instance importing that same export file.
+    main._registry = BrokerRegistry([])
+    dest = TestClient(main.app)
+    with patch.object(BrokerRegistry, "_fetch_kafka", return_value=([], [], [])):
+        with patch.object(main, "save_broker_configs"):
+            resp = dest.post("/api/brokers/import", json=exported)
+    assert resp.status_code == 200
+    assert [r["status"] for r in resp.json()] == ["added"]
+
+
 def test_import_brokers_adds_multiple_and_reports_added_status():
     client = _client_with()
     with patch.object(BrokerRegistry, "_fetch_kafka", return_value=([], [], [])):

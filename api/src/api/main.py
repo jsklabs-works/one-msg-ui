@@ -79,6 +79,14 @@ class ImportBrokersRequest(BaseModel):
     brokers: list[CreateBrokerRequest]
 
 
+class ExportBrokersResponse(BaseModel):
+    # The export/import round trip: this is exactly config/brokers.json's
+    # own on-disk shape (see save_broker_configs), so a file downloaded
+    # from here can be fed straight back into POST /api/brokers/import,
+    # or dropped in as another instance's config/brokers.json, unchanged.
+    brokers: list[BrokerConfig]
+
+
 @app.get("/api/system-types", response_model=list[SystemTypeInfo])
 def get_system_types():
     """Drives the "add broker" form's system-type dropdown and, once
@@ -95,6 +103,19 @@ def get_system_types():
 def get_brokers():
     brokers, _, _, _ = _registry.fetch_all()
     return brokers
+
+
+@app.get("/api/brokers/export", response_model=ExportBrokersResponse)
+def export_brokers():
+    """The other half of the import round trip (POST /api/brokers/import)
+    — every configured broker, full connection config included, in
+    exactly config/brokers.json's own shape. That means credentials
+    included in plaintext: not new exposure (this instance's
+    config/brokers.json already holds them — see config.py's module
+    docstring), but the UI labels the download accordingly since a
+    person can now carry that file around.
+    """
+    return ExportBrokersResponse(brokers=_registry.broker_configs)
 
 
 def _add_one_broker(req: CreateBrokerRequest) -> BrokerImportResult:
