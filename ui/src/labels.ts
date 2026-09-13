@@ -28,3 +28,13 @@ export function kindLabel(kind: string, plural = false): string {
   if (!entry) return kind; // an unknown kind is shown verbatim rather than guessed at
   return plural ? entry.plural : entry.singular;
 }
+
+// NAMESPACE_LABELS reads naturally as a heading ("VPN: default"), but
+// mid-sentence ("2 queues across 3 VPNs") needs the plural, lowercased
+// unless it's an acronym — pluralizing "VPN" to "vpns" would un-acronym
+// it, so only non-all-caps labels get lowercased.
+export function namespaceLabelPlural(type: SystemType): string {
+  const label = NAMESPACE_LABELS[type];
+  const midSentence = label === label.toUpperCase() ? label : label.charAt(0).toLowerCase() + label.slice(1);
+  return `${midSentence}s`;
+}
