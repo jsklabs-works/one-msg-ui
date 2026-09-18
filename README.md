@@ -123,6 +123,14 @@ Everything above is the *dev* setup — the UI on its own Vite dev server, hitti
 
 ### Docker (no Python/Node toolchain needed on the machine that runs it)
 
+**Pre-built image** (after a release has been published — see below, no local build needed):
+
+```bash
+docker run -d -p 8010:8010 -v $(pwd)/data:/data ghcr.io/kriishan-verma/one-msg-ui:latest
+```
+
+**Build it yourself** (works right now, no release required):
+
 ```bash
 docker build -t one-msg-ui .
 docker run -d -p 8010:8010 -v $(pwd)/data:/data one-msg-ui
@@ -156,5 +164,16 @@ ONE_MSG_UI_BROKERS_CONFIG=/path/to/your/brokers.json \
 ```
 
 To hand off *just* the Python side without copying source (e.g. installing on a server that never sees this git checkout), build real wheels instead of installing from local paths: `python -m build` inside each `adapters/*` directory and inside `api/` (each already has the `[build-system]` a wheel needs) produces a `.whl` under that package's own `dist/` — copy those five wheels plus `ui/dist` to the target machine, `pip install *.whl` there, and still set `ONE_MSG_UI_STATIC_DIR` to wherever `ui/dist` ended up (same reason as above — it's not derivable from the installed wheel's own location).
+
+### Releasing a new version
+
+[`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml) builds the same `Dockerfile` above and pushes it to `ghcr.io/kriishan-verma/one-msg-ui` — the pre-built-image command earlier on this page. It runs on a version tag, not on every push to main, so `latest` only moves when someone actually cuts a release:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Pushing the tag also publishes `v0.1.0` and `v0.1` images alongside `latest`, so a deployment can pin to an exact version instead of always tracking `latest`. To re-publish without a new tag (e.g. after a registry hiccup), run the workflow manually from the repo's Actions tab (`workflow_dispatch`) — that run only updates `latest`, since there's no version tag to derive `v0.1.0`-style tags from.
 
 Same distinction as the Docker path: point brokers.json's connection fields at wherever your real brokers actually are — `localhost` only works if the broker and this process are on the same machine.
