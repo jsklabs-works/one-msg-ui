@@ -169,9 +169,29 @@ To hand off *just* the Python side without copying source (e.g. installing on a 
 
 For HTTPS here too, generate the same kind of self-signed certificate the Docker image creates automatically (`openssl req -x509 -newkey rsa:2048 -nodes -keyout key.pem -out cert.pem -days 825 -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"`) and add `--ssl-keyfile key.pem --ssl-certfile cert.pem` to the `uvicorn` command above.
 
+### npm package (frontend only, no backend)
+
+```bash
+npm install @jsklabs-works/one-msg-ui-dist
+```
+
+This is deliberately narrower than the Docker image: it's just [`ui/`](ui)'s built `dist/` output (HTML/JS/CSS), for self-hosting the frontend against a one-msg-ui API you're already running somewhere — not a way to run the whole app from npm alone, since the API and all five adapters are Python. See [`npm-package/README.md`](npm-package/README.md) for how to actually serve the files and what pointing them at your API requires (same-origin works with no setup; a different origin needs your API's CORS opened up).
+
+**Published manually, not via CI.** An automated `npm publish` needs a token that bypasses npm's 2FA/OTP prompt — that's real standing write access to the `@jsklabs-works` org's packages sitting in a GitHub Actions secret, a bigger blast radius than this package is worth automating. Publish it by hand instead:
+
+```bash
+cd ui && VITE_API_BASE_URL="" npm run build
+rm -rf ../npm-package/dist && cp -r dist ../npm-package/dist
+cd ../npm-package
+npm pkg set version="0.1.2"   # match the git tag you're releasing, without the leading "v"
+npm publish
+```
+
+`npm publish` will prompt for your npm login/OTP interactively — that prompt is the point, not something to engineer around.
+
 ### Releasing a new version
 
-[`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml) builds the same `Dockerfile` above and pushes it to `ghcr.io/jsklabs-works/one-msg-ui` — the pre-built-image command earlier on this page. It runs on a version tag, not on every push to main, so `latest` only moves when someone actually cuts a release:
+[`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml) builds the `Dockerfile` above and pushes it to `ghcr.io/jsklabs-works/one-msg-ui` — it runs on a version tag, not on every push to main, so `latest` only moves when someone actually cuts a release:
 
 ```bash
 git tag v0.1.0
@@ -179,5 +199,7 @@ git push origin v0.1.0
 ```
 
 Pushing the tag also publishes `v0.1.0` and `v0.1` images alongside `latest`, so a deployment can pin to an exact version instead of always tracking `latest`. To re-publish without a new tag (e.g. after a registry hiccup), run the workflow manually from the repo's Actions tab (`workflow_dispatch`) — that run only updates `latest`, since there's no version tag to derive `v0.1.0`-style tags from.
+
+The npm package (previous section) isn't part of this tag-push flow at all — publish it by hand, whenever you want that version to go out, using the exact same version number as the git tag so the two stay in sync.
 
 Same distinction as the Docker path: point brokers.json's connection fields at wherever your real brokers actually are — `localhost` only works if the broker and this process are on the same machine.

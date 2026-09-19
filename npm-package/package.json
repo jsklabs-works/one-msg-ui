@@ -1,0 +1,27 @@
+{
+  "name": "@jsklabs-works/one-msg-ui-dist",
+  "version": "0.0.0",
+  "description": "Pre-built static files for one-msg-ui's dashboard UI — HTML/JS/CSS only, no backend. Serve dist/ yourself against your own running one-msg-ui API.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jsklabs-works/one-msg-ui.git",
+    "directory": "npm-package"
+  },
+  "homepage": "https://github.com/jsklabs-works/one-msg-ui#readme",
+  "keywords": [
+    "kafka",
+    "solace",
+    "rabbitmq",
+    "activemq",
+    "ibm-mq",
+    "message-queue",
+    "dashboard"
+  ],
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}
