@@ -401,3 +401,72 @@ def test_fetch_activemq_normalizes_resources_and_health():
     assert len(health) == 1
     assert health[0].system_type == "activemq"
     assert groups == []
+
+
+# -- ssl_cafile: a custom CA bundle, not just verify-or-don't -----------
+# Every REST-based adapter's verify_certificate/verify_tls param already
+# accepted a CA path at runtime (requests.Session.verify takes either),
+# but only Kafka's FIELD_SPECS ever offered a field for it — found by
+# inspection, not a bug report. ssl_cafile now exists for all five and
+# always wins over the plain checkbox when both are set.
+
+
+def test_fetch_solace_passes_ssl_cafile_through_as_the_verify_value():
+    from solace_adapter.client import SolaceAdapter
+
+    bc = BrokerConfig(
+        id="s1", type="solace", name="S1", environment="dev",
+        config={
+            "semp_url": "https://x", "username": "u", "password": "p",
+            "verify_certificate": "false", "ssl_cafile": "/etc/ssl/corp-ca.pem",
+        },
+    )
+    registry = BrokerRegistry([bc])
+
+    with patch.object(SolaceAdapter, "__init__", return_value=None) as mock_init:
+        with patch.object(SolaceAdapter, "get_resources", return_value=[]):
+            with patch.object(SolaceAdapter, "get_health_events", return_value=[]):
+                with patch.object(SolaceAdapter, "close", return_value=None):
+                    registry._fetch_solace(bc)
+
+    # The checkbox says "false" but a configured ssl_cafile always wins —
+    # it already implies "yes, verify, against this bundle."
+    assert mock_init.call_args.kwargs["verify_certificate"] == "/etc/ssl/corp-ca.pem"
+
+
+def test_fetch_solace_falls_back_to_the_checkbox_without_a_cafile():
+    from solace_adapter.client import SolaceAdapter
+
+    bc = BrokerConfig(
+        id="s1", type="solace", name="S1", environment="dev",
+        config={"semp_url": "https://x", "username": "u", "password": "p", "verify_certificate": "false"},
+    )
+    registry = BrokerRegistry([bc])
+
+    with patch.object(SolaceAdapter, "__init__", return_value=None) as mock_init:
+        with patch.object(SolaceAdapter, "get_resources", return_value=[]):
+            with patch.object(SolaceAdapter, "get_health_events", return_value=[]):
+                with patch.object(SolaceAdapter, "close", return_value=None):
+                    registry._fetch_solace(bc)
+
+    assert mock_init.call_args.kwargs["verify_certificate"] is False
+
+
+def test_peek_rabbitmq_session_verify_uses_ssl_cafile_when_set():
+    from api.models import Resource
+
+    bc = BrokerConfig(
+        id="b4", type="rabbitmq", name="B4", environment="dev",
+        config={
+            "api_url": "http://x:15672", "username": "u", "password": "p",
+            "verify_certificate": "false", "ssl_cafile": "/etc/ssl/corp-ca.pem",
+        },
+    )
+    registry = BrokerRegistry([bc])
+    resource = Resource(id="b4:__default__:orders", broker_id="b4", system_type="rabbitmq", namespace="/", name="orders", kind="queue")
+
+    with patch("rabbitmq_adapter.peek.peek_messages", return_value=[]) as mock_peek:
+        registry.peek(resource, limit=5)
+
+    used_session = mock_peek.call_args.kwargs["session"]
+    assert used_session.verify == "/etc/ssl/corp-ca.pem"

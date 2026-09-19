@@ -32,7 +32,7 @@ def _now_iso() -> str:
 class MQAdapter:
     """One instance per queue manager, per the Broker shape in the shared model."""
 
-    def __init__(self, broker_id: str, base_url: str, qmgr_name: str, username: str, password: str, verify_tls: bool = False):
+    def __init__(self, broker_id: str, base_url: str, qmgr_name: str, username: str, password: str, verify_tls: bool | str = False):
         self.broker_id = broker_id
         self.base_url = base_url.rstrip("/")
         self.qmgr_name = qmgr_name

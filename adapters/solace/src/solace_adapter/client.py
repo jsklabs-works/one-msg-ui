@@ -47,7 +47,7 @@ class SolaceAdapter:
         username: str,
         password: str,
         vpn_name: str | None = None,
-        verify_certificate: bool = True,
+        verify_certificate: bool | str = True,
     ):
         self.broker_id = broker_id
         self.base_url = base_url.rstrip("/")

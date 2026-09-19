@@ -48,7 +48,7 @@ class ActiveMQAdapter:
     connection just discovers every address/queue its credentials can see.
     """
 
-    def __init__(self, broker_id: str, base_url: str, username: str, password: str, verify_certificate: bool = True):
+    def __init__(self, broker_id: str, base_url: str, username: str, password: str, verify_certificate: bool | str = True):
         self.broker_id = broker_id
         # base_url is the web console's own base (e.g. http://host:8161) —
         # the Jolokia path is appended here, same convention as Solace's

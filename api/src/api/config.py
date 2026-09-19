@@ -78,6 +78,12 @@ FIELD_SPECS: dict[SystemType, list[FieldSpec]] = {
             required=False,
             default="true",
         ),
+        FieldSpec(
+            name="ssl_cafile",
+            label="CA certificate path (verify against this bundle instead of the system default — overrides the checkbox above)",
+            type="text",
+            required=False,
+        ),
     ],
     "mq": [
         FieldSpec(name="admin_url", label="Admin/REST URL", type="text", placeholder="https://localhost:9543"),
@@ -93,6 +99,12 @@ FIELD_SPECS: dict[SystemType, list[FieldSpec]] = {
             type="checkbox",
             required=False,
             default="false",
+        ),
+        FieldSpec(
+            name="ssl_cafile",
+            label="CA certificate path (verify against this bundle instead of the system default — overrides the checkbox above)",
+            type="text",
+            required=False,
         ),
     ],
     "rabbitmq": [
@@ -112,6 +124,12 @@ FIELD_SPECS: dict[SystemType, list[FieldSpec]] = {
             required=False,
             default="true",
         ),
+        FieldSpec(
+            name="ssl_cafile",
+            label="CA certificate path (verify against this bundle instead of the system default — overrides the checkbox above)",
+            type="text",
+            required=False,
+        ),
     ],
     "activemq": [
         FieldSpec(name="console_url", label="Web console URL (Jolokia lives under it)", type="text", placeholder="http://localhost:8161"),
@@ -123,6 +141,12 @@ FIELD_SPECS: dict[SystemType, list[FieldSpec]] = {
             type="checkbox",
             required=False,
             default="true",
+        ),
+        FieldSpec(
+            name="ssl_cafile",
+            label="CA certificate path (verify against this bundle instead of the system default — overrides the checkbox above)",
+            type="text",
+            required=False,
         ),
     ],
 }
@@ -183,6 +207,29 @@ def config_bool(config: dict, key: str, default: bool) -> bool:
     if isinstance(value, bool):
         return value
     return str(value).strip().lower() in ("1", "true", "yes", "on")
+
+
+def resolve_tls_verify(config: dict, bool_field: str, bool_default: bool) -> bool | str:
+    """`requests.Session.verify` (which every REST-based adapter's own
+    verify_certificate/verify_tls constructor param feeds directly)
+    accepts either a plain bool or a path to a CA bundle file. A
+    configured `ssl_cafile` always wins — it already implies "yes,
+    verify, against this specific bundle" — falling back to the plain
+    enable/disable checkbox (`bool_field`) when none is set.
+
+    Kafka has carried `ssl_cafile` since the very first adapter; the
+    other four only ever exposed the checkbox, so anyone behind a real
+    (non-self-signed, non-public) corporate CA had no option but to
+    disable verification entirely to connect at all — found by
+    inspection, not a bug report, but a real functional gap all the
+    same. Every affected adapter's `session.verify = ...` assignment
+    already worked with either type at runtime (requests doesn't care),
+    so this is purely about actually offering the field.
+    """
+    cafile = str(config.get("ssl_cafile") or "").strip()
+    if cafile:
+        return cafile
+    return config_bool(config, bool_field, bool_default)
 
 
 def slugify(text: str) -> str:

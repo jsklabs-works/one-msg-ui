@@ -65,7 +65,7 @@ class RabbitMQAdapter:
         username: str,
         password: str,
         vhost: str | None = None,
-        verify_certificate: bool = True,
+        verify_certificate: bool | str = True,
     ):
         self.broker_id = broker_id
         self.base_url = base_url.rstrip("/")

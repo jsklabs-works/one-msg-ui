@@ -18,7 +18,7 @@ import datetime as _dt
 import logging
 
 from . import models, normalize
-from .config import BrokerConfig, config_bool, connection_identity
+from .config import BrokerConfig, config_bool, connection_identity, resolve_tls_verify
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +126,7 @@ class BrokerRegistry:
             vpn_name=bc.config.get("vpn_name") or None,
             username=bc.config["username"],
             password=bc.config["password"],
-            verify_certificate=config_bool(bc.config, "verify_certificate", True),
+            verify_certificate=resolve_tls_verify(bc.config, "verify_certificate", True),
         )
         try:
             resources = [normalize.solace_resource(r, bc.id) for r in adapter.get_resources()]
@@ -147,7 +147,7 @@ class BrokerRegistry:
             vhost=bc.config.get("vhost") or None,
             username=bc.config["username"],
             password=bc.config["password"],
-            verify_certificate=config_bool(bc.config, "verify_certificate", True),
+            verify_certificate=resolve_tls_verify(bc.config, "verify_certificate", True),
         )
         try:
             resources = [normalize.rabbitmq_resource(r, bc.id) for r in adapter.get_resources()]
@@ -164,7 +164,7 @@ class BrokerRegistry:
             base_url=bc.config["console_url"],
             username=bc.config["username"],
             password=bc.config["password"],
-            verify_certificate=config_bool(bc.config, "verify_certificate", True),
+            verify_certificate=resolve_tls_verify(bc.config, "verify_certificate", True),
         )
         try:
             resources = [normalize.activemq_resource(r, bc.id) for r in adapter.get_resources()]
@@ -182,7 +182,7 @@ class BrokerRegistry:
             qmgr_name=bc.config["qmgr_name"],
             username=bc.config["admin_username"],
             password=bc.config["admin_password"],
-            verify_tls=config_bool(bc.config, "verify_tls", False),
+            verify_tls=resolve_tls_verify(bc.config, "verify_tls", False),
         )
         try:
             raw_resources = adapter.get_resources(queue_pattern=bc.config.get("queue_pattern", "*"))
@@ -286,7 +286,7 @@ class BrokerRegistry:
                 resource_id=resource.id,
                 queue_name=resource.name,
                 limit=limit,
-                verify_certificate=config_bool(bc.config, "verify_certificate", True),
+                verify_certificate=resolve_tls_verify(bc.config, "verify_certificate", True),
             )
             return [normalize.solace_message_sample(m) for m in samples]
 
@@ -297,7 +297,7 @@ class BrokerRegistry:
 
             session = requests.Session()
             session.auth = (override_username or bc.config["app_username"], override_password if override_username else bc.config["app_password"])
-            session.verify = config_bool(bc.config, "verify_tls", False)
+            session.verify = resolve_tls_verify(bc.config, "verify_tls", False)
             try:
                 samples = peek_messages(
                     session=session,
@@ -318,7 +318,7 @@ class BrokerRegistry:
 
             session = requests.Session()
             session.auth = (override_username or bc.config["username"], override_password if override_username else bc.config["password"])
-            session.verify = config_bool(bc.config, "verify_certificate", True)
+            session.verify = resolve_tls_verify(bc.config, "verify_certificate", True)
             try:
                 samples = peek_messages(
                     session=session,
@@ -343,7 +343,7 @@ class BrokerRegistry:
 
             session = requests.Session()
             session.auth = (override_username or bc.config["username"], override_password if override_username else bc.config["password"])
-            session.verify = config_bool(bc.config, "verify_certificate", True)
+            session.verify = resolve_tls_verify(bc.config, "verify_certificate", True)
             try:
                 samples = peek_messages(
                     session=session,

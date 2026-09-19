@@ -4,6 +4,7 @@ from api.config import (
     BrokerConfig,
     connection_identity,
     load_broker_configs,
+    resolve_tls_verify,
     save_broker_configs,
     slugify,
     validate_broker_config_fields,
@@ -123,3 +124,22 @@ def test_connection_identity_activemq_distinguishes_different_console_url():
 
 def test_connection_identity_unknown_type_returns_empty_tuple():
     assert connection_identity("bogus", {"anything": "x"}) == ()
+
+
+def test_resolve_tls_verify_falls_back_to_the_bool_flag_when_no_cafile_set():
+    assert resolve_tls_verify({"verify_certificate": "false"}, "verify_certificate", True) is False
+    assert resolve_tls_verify({}, "verify_certificate", True) is True
+    assert resolve_tls_verify({}, "verify_tls", False) is False
+
+
+def test_resolve_tls_verify_prefers_ssl_cafile_over_the_bool_flag():
+    # A configured CA bundle already implies "verify, against this file" —
+    # it wins even if the checkbox says false, since setting a CA path and
+    # then also unchecking verification would be a contradictory config.
+    config = {"verify_certificate": "false", "ssl_cafile": "/etc/ssl/corp-ca.pem"}
+    assert resolve_tls_verify(config, "verify_certificate", True) == "/etc/ssl/corp-ca.pem"
+
+
+def test_resolve_tls_verify_treats_blank_cafile_as_unset():
+    config = {"verify_certificate": "true", "ssl_cafile": "   "}
+    assert resolve_tls_verify(config, "verify_certificate", True) is True
