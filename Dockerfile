@@ -42,5 +42,12 @@ ENV ONE_MSG_UI_STATIC_DIR=/app/ui/dist
 # the same empty-state landing page a fresh checkout shows.
 ENV ONE_MSG_UI_BROKERS_CONFIG=/data/brokers.json
 
+# HTTPS by default (see docker-entrypoint.sh) — a self-signed cert, since
+# every user runs this on their own machine with no shared public domain a
+# real CA could issue a trusted cert for. openssl is already present in
+# python:3.12-slim (confirmed, not assumed).
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
+
 EXPOSE 8010
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8010"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

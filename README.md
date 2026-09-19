@@ -140,6 +140,8 @@ docker run -d -p 8010:8010 -v $(pwd)/data:/data one-msg-ui
 
 Verified live: built the image, ran it standalone (empty-state landing page, all five system types listed), added a real RabbitMQ and a real ActiveMQ broker running on the host via `host.docker.internal`, confirmed resources/health loaded through the containerized app, and confirmed a broker added with `/data` mounted was still there after `docker restart`.
 
+**HTTPS by default.** [`docker-entrypoint.sh`](docker-entrypoint.sh) generates a self-signed certificate (`openssl req -x509`, already present in the base image) before starting uvicorn with `--ssl-keyfile`/`--ssl-certfile` — visit **`https://localhost:8010`**, not `http://`. This is deliberate, not a placeholder: every user runs this on their own machine, so there's no shared public domain a real CA could issue a trusted cert for — self-signed is what "HTTPS with no public domain" actually looks like, the same as any local HTTPS dev setup. Your browser will show a one-time "not secure" warning (the cert isn't from a recognized CA) — click through it once. Mounting `-v $(pwd)/data:/data` also persists the generated certificate at `/data/tls/`, so restarting the container reuses the same cert instead of generating a new one (and a new browser warning) every time — confirmed live: same certificate fingerprint before and after a `docker restart`. Override the cert location with `ONE_MSG_UI_TLS_DIR` if you'd rather point it somewhere other than `/data/tls`, or drop in your own real certificate at that path (as `cert.pem`/`key.pem`) if you do have one — the entrypoint only generates one when neither file already exists.
+
 ### Plain build (already have Python 3.10+ and Node on the target machine)
 
 ```bash
@@ -164,6 +166,8 @@ ONE_MSG_UI_BROKERS_CONFIG=/path/to/your/brokers.json \
 ```
 
 To hand off *just* the Python side without copying source (e.g. installing on a server that never sees this git checkout), build real wheels instead of installing from local paths: `python -m build` inside each `adapters/*` directory and inside `api/` (each already has the `[build-system]` a wheel needs) produces a `.whl` under that package's own `dist/` — copy those five wheels plus `ui/dist` to the target machine, `pip install *.whl` there, and still set `ONE_MSG_UI_STATIC_DIR` to wherever `ui/dist` ended up (same reason as above — it's not derivable from the installed wheel's own location).
+
+For HTTPS here too, generate the same kind of self-signed certificate the Docker image creates automatically (`openssl req -x509 -newkey rsa:2048 -nodes -keyout key.pem -out cert.pem -days 825 -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"`) and add `--ssl-keyfile key.pem --ssl-certfile cert.pem` to the `uvicorn` command above.
 
 ### Releasing a new version
 
