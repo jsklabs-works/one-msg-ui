@@ -126,7 +126,7 @@ Everything above is the *dev* setup — the UI on its own Vite dev server, hitti
 **Pre-built image** (after a release has been published — see below, no local build needed):
 
 ```bash
-docker run -d -p 8010:8010 -v $(pwd)/data:/data ghcr.io/kriishan-verma/one-msg-ui:latest
+docker run -d -p 8010:8010 -v $(pwd)/data:/data ghcr.io/jsklabs-works/one-msg-ui:latest
 ```
 
 **Build it yourself** (works right now, no release required):
@@ -167,7 +167,7 @@ To hand off *just* the Python side without copying source (e.g. installing on a 
 
 ### Releasing a new version
 
-[`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml) builds the same `Dockerfile` above and pushes it to `ghcr.io/kriishan-verma/one-msg-ui` — the pre-built-image command earlier on this page. It runs on a version tag, not on every push to main, so `latest` only moves when someone actually cuts a release:
+[`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml) builds the same `Dockerfile` above and pushes it to `ghcr.io/jsklabs-works/one-msg-ui` — the pre-built-image command earlier on this page. It runs on a version tag, not on every push to main, so `latest` only moves when someone actually cuts a release:
 
 ```bash
 git tag v0.1.0
